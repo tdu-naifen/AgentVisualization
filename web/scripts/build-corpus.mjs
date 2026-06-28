@@ -22,6 +22,17 @@ const candidates = [
 ];
 const srcDir = candidates.find((d) => existsSync(d));
 if (!srcDir) {
+  // The markdown corpus source (under reference/) is not always present — e.g. in
+  // CI/GitHub Pages builds where reference/ is gitignored. In that case fall back to
+  // the committed public/corpus.json so the static export can still be built.
+  const existingOut = resolve(scriptDir, '..', 'public', 'corpus.json');
+  if (existsSync(existingOut)) {
+    console.warn(
+      '[build-corpus] WARN: no corpus source directory found; using existing ' +
+        existingOut,
+    );
+    process.exit(0);
+  }
   console.error('[build-corpus] ERROR: no corpus source directory found. Looked in:');
   for (const c of candidates) console.error('  - ' + c);
   process.exit(1);

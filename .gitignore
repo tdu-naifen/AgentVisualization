@@ -1,7 +1,10 @@
 *.md
+# Keep the corpus source markdown — the web build reads these to generate
+# web/public/corpus.json.
+!reference/shared/corpus/raw_markdown/*.md
 node_modules
 .superpowers
-reference
+docs
 
 # Next.js build artifacts
 .next
@@ -15,3 +18,4 @@ next-env.d.ts
 # secrets — never commit
 .env
 .env.*
+.next
