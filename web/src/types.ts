@@ -232,6 +232,9 @@ export interface LLM {
   think(messages: ChatMsg[], onToken: (t: string) => void): Promise<string>;
   /** force a schema-valid structured decision; onToken (optional) streams the raw decision text live */
   decide(messages: ChatMsg[], schemaHint: string, onToken?: (t: string) => void): Promise<ToolCall>;
+  /** Interrupt any in-flight generation. Safe to call when idle. Optional so fake
+   *  LLMs in tests may omit it. */
+  cancel?(): void;
 }
 
 /** Tools API the agent scenarios call. lib/tools.ts implements it over corpus.json. */

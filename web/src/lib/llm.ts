@@ -26,6 +26,7 @@
 
 import type { LLM, ChatMsg, ToolCall, ToolName } from '@/types';
 import { TOOL_NAMES } from '@/types';
+import { CancelledError } from '@/lib/cancel';
 
 // Markers emitted by the Gemma 4 chat template when thinking is enabled.
 const THOUGHT_OPEN = '<|channel>thought';
@@ -97,12 +98,29 @@ export class GemmaLLM implements LLM {
   private loading = false;
   private modelKey: string;
 
+  // The interrupt handle for the CURRENT generation. transformers.js checks it
+  // between tokens; interrupt() halts decode within ~one token. Recreated per
+  // generate() so a stale interrupt can't poison the next call.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private stopper: any = null;
+  private cancelRequested = false;
+
   constructor(modelKey: string = DEFAULT_MODEL_KEY) {
     this.modelKey = MODELS[modelKey] ? modelKey : DEFAULT_MODEL_KEY;
   }
 
   ready(): boolean {
     return this.pipe !== null;
+  }
+
+  /** Interrupt any in-flight generation. The decode loop stops within ~one token and
+   *  generate() throws CancelledError so the await chain unwinds and the partial step
+   *  is dropped. Safe to call when idle. */
+  cancel(): void {
+    this.cancelRequested = true;
+    if (this.stopper && typeof this.stopper.interrupt === 'function') {
+      this.stopper.interrupt();
+    }
   }
 
   async load(onProgress: (pct: number) => void): Promise<void> {
@@ -152,6 +170,7 @@ export class GemmaLLM implements LLM {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       onProgress(100);
+      this.cancelRequested = false;
     } catch (err) {
       // The classic OOM on a too-large contiguous weight buffer. Make it actionable.
       const msg = err instanceof Error ? err.message : String(err);
@@ -340,9 +359,17 @@ export class GemmaLLM implements LLM {
     maxNewTokens = 512,
   ): Promise<string> {
     if (!this.pipe) throw new Error('LLM not loaded');
-    const { TextStreamer } = await import('@huggingface/transformers');
+    const { TextStreamer, InterruptableStoppingCriteria } = await import('@huggingface/transformers');
+    // Fresh interrupt handle per call; clear any stale cancel request.
+    this.cancelRequested = false;
+    const stopper = new InterruptableStoppingCriteria();
+    this.stopper = stopper;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const opts: any = { max_new_tokens: maxNewTokens, do_sample: false };
+    const opts: any = {
+      max_new_tokens: maxNewTokens,
+      do_sample: false,
+      stopping_criteria: stopper,
+    };
     if (onToken) {
       opts.streamer = new TextStreamer(this.pipe.tokenizer, {
         skip_prompt: true,
@@ -351,8 +378,15 @@ export class GemmaLLM implements LLM {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
     }
-    const out = await this.pipe(prompt, opts);
-    return extractGeneratedText(out, prompt);
+    try {
+      const out = await this.pipe(prompt, opts);
+      // If the user interrupted, the model stopped early — treat as a cancellation
+      // rather than returning a truncated answer the caller would commit.
+      if (this.cancelRequested) throw new CancelledError();
+      return extractGeneratedText(out, prompt);
+    } finally {
+      if (this.stopper === stopper) this.stopper = null;
+    }
   }
 }
 
