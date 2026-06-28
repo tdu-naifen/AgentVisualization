@@ -61,6 +61,7 @@ export class EvalScenario extends BaseScenario {
     subtitle: 'climb the pyramid: reference → verifiable → judge → human',
     kind: 'workflow',
     teaches: 'Climb the evaluation pyramid only as far as the task forces you: cheap metrics first, judge last.',
+    intro: 'Evaluation is a pyramid: cheap deterministic metrics first, the expensive LLM judge only when needed. L1 ROUGE and L2 task-checks are code; L3 is the LLM-as-judge (the one model call); L4 is human calibration. Climb only as far as the task forces.',
   };
 
   private llm: LLM;
@@ -86,18 +87,19 @@ export class EvalScenario extends BaseScenario {
     const done = stepIndex + 1 >= TOTAL_LEVELS;
     switch (stepIndex) {
       case 0:
-        return { step: this.level1(stepIndex), done };
+        return { step: this.level1(stepIndex, cb), done };
       case 1:
-        return { step: this.level2(stepIndex), done };
+        return { step: this.level2(stepIndex, cb), done };
       case 2:
         return { step: await this.level3(stepIndex, cb), done };
       default:
-        return { step: this.level4(stepIndex), done };
+        return { step: this.level4(stepIndex, cb), done };
     }
   }
 
   // ── L1 · Reference-based — exact-match / ROUGE-1 token-overlap F1 (NO LLM) ────
-  private level1(stepIndex: number): StepView {
+  private level1(stepIndex: number, cb: StepCallbacks): StepView {
+    cb.onPhase?.({ phase: 'act', stage: stepIndex });
     this.trace.spanOpen('level', { step: stepIndex, level: 'L1', name: 'reference-based' });
 
     const r = rouge1(CANDIDATE_ANSWER, REFERENCE_ANSWER);
@@ -138,7 +140,8 @@ export class EvalScenario extends BaseScenario {
   }
 
   // ── L2 · Task-verifiable — retrieval metrics + faithfulness/relevance (NO LLM) ─
-  private level2(stepIndex: number): StepView {
+  private level2(stepIndex: number, cb: StepCallbacks): StepView {
+    cb.onPhase?.({ phase: 'act', stage: stepIndex });
     this.trace.spanOpen('level', { step: stepIndex, level: 'L2', name: 'task-verifiable' });
     this.trace.step('retrieval_bakeoff', { k: 5, corpus_docs: this.docs.length, best: 'hybrid' });
 
@@ -184,6 +187,7 @@ export class EvalScenario extends BaseScenario {
 
   // ── L3 · LLM-as-judge — rubric scoring. The ONLY streaming step. ─────────────
   private async level3(stepIndex: number, cb: StepCallbacks): Promise<StepView> {
+    cb.onPhase?.({ phase: 'generate', stage: stepIndex });
     this.trace.spanOpen('level', { step: stepIndex, level: 'L3', name: 'llm-as-judge' });
 
     const messages: ChatMsg[] = [
@@ -263,7 +267,8 @@ export class EvalScenario extends BaseScenario {
   }
 
   // ── L4 · Human eval — Cohen's κ calibrates the judge (NO LLM, terminal) ───────
-  private level4(stepIndex: number): StepView {
+  private level4(stepIndex: number, cb: StepCallbacks): StepView {
+    cb.onPhase?.({ phase: 'act', stage: stepIndex });
     this.trace.spanOpen('level', { step: stepIndex, level: 'L4', name: 'human-eval' });
 
     // Binarize the judge's 1–5 score (good = ≥4) and compare to a small committed

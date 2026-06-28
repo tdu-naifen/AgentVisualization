@@ -322,6 +322,7 @@ export class SafetyScenario extends BaseScenario {
     subtitle: 'PII · injection · cost · the safety flywheel',
     kind: 'workflow',
     teaches: 'Safety is a design dimension: redact PII, fence untrusted text, cap cost, and grow a regression set.',
+    intro: 'Safety is layered defense: redact PII before the model sees it, fence untrusted text against injection, cap cost, and grow a regression set. PII/cost/flywheel are deterministic; injection defense is the one model call. Each layer is independent.',
   };
 
   private llm: LLM;
@@ -351,19 +352,20 @@ export class SafetyScenario extends BaseScenario {
   protected async runStep(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
     switch (stepIndex) {
       case 0:
-        return this.guardPiiRedaction();
+        return this.guardPiiRedaction(cb);
       case 1:
         return this.guardInjectionDefense(cb);
       case 2:
-        return this.guardCostCeiling();
+        return this.guardCostCeiling(cb);
       default:
-        return this.guardSafetyFlywheel();
+        return this.guardSafetyFlywheel(cb);
     }
   }
 
   // ① PII redaction at INGEST (NO model). Scrub PII before anything reaches the
   //    model, the index, or telemetry — then RE-SCAN and assert zero residual.
-  private guardPiiRedaction(): StepResult {
+  private guardPiiRedaction(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 0 });
     this.trace.spanOpen('guardrail', { step: 0, name: 'pii_redaction', model: false });
 
     const { redacted, counts } = redactPii(RAW_PII_INPUT);
@@ -401,6 +403,7 @@ export class SafetyScenario extends BaseScenario {
   //    separation at the prompt layer, AND a tool whitelist backstop at the action
   //    layer that makes the blast radius zero even if the prompt defense fails.
   private async guardInjectionDefense(cb: StepCallbacks): Promise<StepResult> {
+    cb.onPhase?.({ phase: 'generate', stage: 1 });
     this.trace.spanOpen('guardrail', { step: 1, name: 'injection_defense', model: true });
 
     // The attack: scan the untrusted doc for injected imperatives.
@@ -505,7 +508,8 @@ export class SafetyScenario extends BaseScenario {
   // ③ Cost ceiling (NO model). Enforce a per-request token cap with a hard abort
   //    BEFORE the call: estimate, then either send (under) or abort (over). Once a
   //    request is in flight the cost is committed, so the gate must sit pre-call.
-  private guardCostCeiling(): StepResult {
+  private guardCostCeiling(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 2 });
     this.trace.spanOpen('guardrail', { step: 2, name: 'cost_ceiling', model: false });
 
     const smallEst = estimateTokens(SMALL_REQUEST);
@@ -545,7 +549,8 @@ export class SafetyScenario extends BaseScenario {
   // ④ The safety FLYWHEEL (NO model, terminal). An escaped failure becomes a
   //    PERMANENT regression case → tighten the policy → re-test → now caught. The
   //    eval set only GROWS, so the system gets monotonically harder to break.
-  private guardSafetyFlywheel(): StepResult {
+  private guardSafetyFlywheel(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 3 });
     this.trace.spanOpen('guardrail', { step: 3, name: 'flywheel', model: false });
 
     const before = this.golden.length;

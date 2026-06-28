@@ -217,6 +217,7 @@ export class ValidationScenario extends BaseScenario {
     subtitle: 'climb the ladder, cheapest rung first; fail closed',
     kind: 'workflow',
     teaches: 'Climb a validation ladder, cheapest check first, and fail closed when a rung doesn’t pass.',
+    intro: 'Trust agent output by climbing a validation ladder, cheapest rung first, failing closed. Schema/lint/replay are deterministic; rung 4 LLM judge is the one model call; human is the last resort. A rung that fails stops the climb.',
   };
 
   private llm: LLM;
@@ -247,21 +248,22 @@ export class ValidationScenario extends BaseScenario {
   protected async runStep(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
     switch (stepIndex) {
       case 0:
-        return this.rungSchema();
+        return this.rungSchema(cb);
       case 1:
-        return this.rungLint();
+        return this.rungLint(cb);
       case 2:
-        return this.rungReplay();
+        return this.rungReplay(cb);
       case 3:
         return this.rungJudge(cb);
       default:
-        return this.rungHuman();
+        return this.rungHuman(cb);
     }
   }
 
   // ① rung 1 — schema (structural, no model). The cheapest gate: a malformed
   //    artifact can't even be replayed, so rejecting it here saves every rung below.
-  private rungSchema(): StepResult {
+  private rungSchema(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 0 });
     this.trace.spanOpen('rung', { step: 0, rung: 'schema', model: false });
     const errors = schemaErrors(this.candidate);
     const passed = errors.length === 0;
@@ -292,7 +294,8 @@ export class ValidationScenario extends BaseScenario {
 
   // ② rung 1b — lint (domain sanity, no model). The teaching beat: the broken
   //    threshold FAILS lint → feed errors back → regenerate → repaired passes.
-  private rungLint(): StepResult {
+  private rungLint(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 1 });
     this.trace.spanOpen('rung', { step: 1, rung: 'lint', model: false });
 
     const before = lintErrors(this.candidate); // BROKEN_CPU → fails
@@ -342,7 +345,8 @@ export class ValidationScenario extends BaseScenario {
 
   // ③ rung 2 — replay / dry-run (behavioural ground truth, no model). Catches the
   //    "passes schema, still operationally wrong" config before it touches prod.
-  private rungReplay(): StepResult {
+  private rungReplay(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 2 });
     this.trace.spanOpen('rung', { step: 2, rung: 'replay', model: false });
 
     const badVal = aggregate(REPLAY_BAD, this.candidate.aggregation);
@@ -374,6 +378,7 @@ export class ValidationScenario extends BaseScenario {
   //    LAST, after the cheap certain checks. mode:'stream' so the FULL reply (which
   //    carries the rubric "SCORE: n/5") is captured — the score is the MODEL's.
   private async rungJudge(cb: StepCallbacks): Promise<StepResult> {
+    cb.onPhase?.({ phase: 'generate', stage: 3 });
     this.trace.spanOpen('rung', { step: 3, rung: 'judge', model: true });
 
     const messages: ChatMsg[] = [
@@ -459,7 +464,8 @@ export class ValidationScenario extends BaseScenario {
 
   // ⑤ rung 4 — human / outcome (no model). All green → AUTO-APPLY; otherwise fail
   //    closed: degrade to a validated safe-default + escalate to a human. Terminal.
-  private rungHuman(): StepResult {
+  private rungHuman(cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: 4 });
     this.trace.spanOpen('rung', { step: 4, rung: 'human', model: false });
 
     // The verifiable rungs (schema/lint/replay) all passed by construction in this

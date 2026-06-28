@@ -48,6 +48,7 @@ const RAG_META: ScenarioMeta = {
   subtitle: 'fixed Retrieve → Reason → Answer',
   kind: 'workflow',
   teaches: 'Retrieve documents, put them in the model’s context, and let it answer — grounded and cited.',
+  intro: 'RAG fixes hallucination by forcing the model to answer from retrieved docs, not memory. Stage 1 Retrieve pulls top BM25 hits (code), stage 2 Reason is the ONE model call, stage 3 Answer gates every claim to a citation (code). Only Reason is the model.',
 };
 
 export class RagScenario extends BaseScenario {
@@ -92,19 +93,20 @@ export class RagScenario extends BaseScenario {
   protected async runStep(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
     switch (stepIndex) {
       case 0:
-        return this.retrieve(stepIndex);
+        return this.retrieve(stepIndex, cb);
       case 1:
         return this.reason(stepIndex, cb);
       default:
         // Stage 3 (and any defensive overflow) is the terminal gate.
-        return this.validate(stepIndex);
+        return this.validate(stepIndex, cb);
     }
   }
 
   // ① RETRIEVE — BM25 rank the planted query. Deterministic, NO model: this is the
   //    teaching beat — retrieval is a pure function, evaluated on its OWN terms
   //    (recall@k / MRR), separate from the answer it later feeds.
-  private retrieve(stepIndex: number): StepResult {
+  private retrieve(stepIndex: number, cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: stepIndex });
     this.trace.spanOpen('retrieve', { query: DEMO_QUERY, k: RETRIEVE_K });
 
     this.hits = rankDocs(this.docs, DEMO_QUERY, RETRIEVE_K);
@@ -157,6 +159,7 @@ export class RagScenario extends BaseScenario {
   //    titles + summaries; the prompt requires a [doc_id] citation. This is the
   //    only step that carries a streaming box.
   private async reason(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    cb.onPhase?.({ phase: 'generate', stage: stepIndex });
     this.trace.spanOpen('reason', { groundingK: GROUNDING_K });
 
     const grounded = this.groundingDocs();
@@ -213,7 +216,8 @@ export class RagScenario extends BaseScenario {
   //    the copilot above was empty). Checks, cheapest-first: non-empty, has a
   //    [doc_id] citation, and every cited id was actually retrieved (grounded
   //    provenance — catches a model citing a doc we never surfaced). Terminal step.
-  private validate(stepIndex: number): StepResult {
+  private validate(stepIndex: number, cb: StepCallbacks): StepResult {
+    cb.onPhase?.({ phase: 'act', stage: stepIndex });
     this.trace.spanOpen('validate');
 
     const answer = this.answer.trim();
