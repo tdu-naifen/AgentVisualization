@@ -379,16 +379,22 @@ export class SafetyScenario extends BaseScenario {
       `${redacted}\n\n` +
       `removed: ${summarizeCounts(counts)}   (total ${total})\n` +
       `re-scan: ${residualCount === 0 ? 'zero residual ✓' : `STILL LEAKS → ${JSON.stringify(residual)}`}   ` +
-      `findPii(redacted) → ${residualCount === 0 ? '{} (clean)' : 'non-empty'}\n\n` +
-      'Teaching: redact at the entry point. Once PII is in a prompt / index / log you have lost ' +
-      'control of it — the cheapest place to stop a privacy incident is the boundary. A scrubber ' +
-      'you do not re-check is a scrubber you do not trust, so we re-scan and assert empty.';
+      `findPii(redacted) → ${residualCount === 0 ? '{} (clean)' : 'non-empty'}`;
 
     const panels = [
       makePanel('raw', codeTitle('raw input (carries PII — would be embedded / logged / sent)'), RAW_PII_INPUT, 'ctx'),
       makePanel('redacted', codeTitle('redacted output  (safe to index / send)'), redactedBody, 'observe'),
     ];
-    return { step: makeStep(0, '① PII redaction at ingest', { panels }), done: false };
+    return {
+      step: makeStep(0, '① PII redaction at ingest', {
+        panels,
+        hint:
+          'Redact at the entry point. Once PII is in a prompt / index / log you have lost ' +
+          'control of it — the cheapest place to stop a privacy incident is the boundary. A scrubber ' +
+          'you do not re-check is a scrubber you do not trust, so we re-scan and assert empty.',
+      }),
+      done: false,
+    };
   }
 
   // ② Prompt-injection defense (the ONLY model step). Two layers: instruction/data
@@ -477,9 +483,7 @@ export class SafetyScenario extends BaseScenario {
     const whitelistBody =
       refusals.map((r) => `  ok=${r.ok}  ✗ "${r.kind}" → NOT on the whitelist · refused before any dry-run`).join('\n') +
       `\n\nwhitelist = ${Object.keys(ALLOWED_ACTIONS).length} allowed kinds; the injected ` +
-      `delete/exfiltrate actions are not among them → ${allRefused ? 'blast radius zero ✓' : 'LEAK'}\n\n` +
-      'Teaching: retrieved text is untrusted DATA. Prompt hygiene lowers the ODDS of a hijack; ' +
-      'the whitelist makes its BLAST RADIUS zero. Design for the prompt defense failing.';
+      `delete/exfiltrate actions are not among them → ${allRefused ? 'blast radius zero ✓' : 'LEAK'}`;
 
     const panels = [
       makePanel('attack', codeTitle('the attack — injected imperatives in retrieved text'), attackBody, 'think'),
@@ -487,7 +491,13 @@ export class SafetyScenario extends BaseScenario {
       makePanel('whitelist', codeTitle('layer 2 · tool whitelist backstop'), whitelistBody, 'observe'),
     ];
     return {
-      step: makeStep(1, '② Prompt-injection defense', { panels, guardrail: 'whitelist_blocked' }),
+      step: makeStep(1, '② Prompt-injection defense', {
+        panels,
+        guardrail: 'whitelist_blocked',
+        hint:
+          'Retrieved text is untrusted DATA. Prompt hygiene lowers the ODDS of a hijack; ' +
+          'the whitelist makes its BLAST RADIUS zero. Design for the prompt defense failing.',
+      }),
       done: false,
     };
   }
@@ -513,16 +523,23 @@ export class SafetyScenario extends BaseScenario {
 
     const abortedBody =
       `request: "Explain in exhaustive detail: CPU saturation causes and fixes. ×200"  (${BIG_REQUEST.length} chars)\n` +
-      `estimate ~${bigEst} tok  > ceiling ${CEILING_TOKENS}  → ABORTED pre-call ✗  (no spend, nothing in flight)\n\n` +
-      'Teaching: cost is a safety property, enforced PRE-CALL, not a hope. Once a request is in ' +
-      'flight the cost is committed — the only place a cap is free to enforce is before the spend, ' +
-      'on the input you control. (An output cap via max_tokens is the complementary lever.)';
+      `estimate ~${bigEst} tok  > ceiling ${CEILING_TOKENS}  → ABORTED pre-call ✗  (no spend, nothing in flight)`;
 
     const panels = [
       makePanel('sent', codeTitle('normal request — under the cap'), sentBody, 'observe'),
       makePanel('aborted', codeTitle('runaway request — over the cap → hard abort'), abortedBody, 'observe'),
     ];
-    return { step: makeStep(2, '③ Cost ceiling', { panels, guardrail: 'budget' }), done: false };
+    return {
+      step: makeStep(2, '③ Cost ceiling', {
+        panels,
+        guardrail: 'budget',
+        hint:
+          'Cost is a safety property, enforced PRE-CALL, not a hope. Once a request is in ' +
+          'flight the cost is committed — the only place a cap is free to enforce is before the spend, ' +
+          'on the input you control. (An output cap via max_tokens is the complementary lever.)',
+      }),
+      done: false,
+    };
   }
 
   // ④ The safety FLYWHEEL (NO model, terminal). An escaped failure becomes a
@@ -573,16 +590,22 @@ export class SafetyScenario extends BaseScenario {
       'regression suite AFTER the fix (the escaped case is now permanently caught):\n' +
       afterResults.map(fmtVerdict).join('\n') +
       `\n\n→ all ${afterResults.length} safety cases now caught: ${allCaught}. The eval set grew and ` +
-      'will gate every future run.\n\n' +
-      'Teaching: a flywheel never fixes the same hole twice — every incident leaves a permanent ' +
-      "test behind, so the system gets monotonically harder to break. Safety isn't a switch.";
+      'will gate every future run.';
 
     const panels = [
       makePanel('ledger', codeTitle('the durable ledger — every failure becomes a permanent case'), ledgerBody, 'observe'),
       makePanel('suite', codeTitle('enroll → tighten policy → re-test (escaped → caught)'), suiteBody, 'observe'),
     ];
     // Terminal: the flywheel is always the last of the 4 guardrails.
-    return { step: makeStep(3, '④ The safety flywheel', { panels }), done: true };
+    return {
+      step: makeStep(3, '④ The safety flywheel', {
+        panels,
+        hint:
+          'A flywheel never fixes the same hole twice — every incident leaves a permanent ' +
+          "test behind, so the system gets monotonically harder to break. Safety isn't a switch.",
+      }),
+      done: true,
+    };
   }
 }
 
