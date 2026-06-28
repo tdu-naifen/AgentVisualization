@@ -29,6 +29,10 @@ describe('cancellation surfaces as a clean terminal (not an error)', () => {
     // not just that next() rejected (the old catch block rejected + finished too).
     const traceLines: TraceLine[] = [];
     const cb: StepCallbacks = { onStream: () => {}, onTrace: (l) => traceLines.push(l) };
+    // With the per-phase design, the first next() is the 'input' phase (builds panels,
+    // no LLM call) — it completes successfully. The second next() is 'think', which
+    // calls llm.think() and triggers the cancellation.
+    await scenario.next(cb); // input phase — no LLM, completes normally
     await expect(scenario.next(cb)).rejects.toBeInstanceOf(CancelledError);
     // After a cancel, the scenario is finished (the loop won't spin) and produced no
     // committed step the caller must show.
@@ -84,19 +88,23 @@ class WalkLLM implements LLM {
   cancel(): void {}
 }
 
-// re-enabled in agent task
-describe.skip('02 agent emits real phase events for the rail', () => {
-  it('emits receive, think, act (with tool), observe each step', async () => {
+// re-enabled: each next() advances ONE subphase — input→think→generate→act
+describe('02 agent emits real phase events for the rail', () => {
+  it('emits input, think, generate, act (with tool) across 4 next() calls', async () => {
     const phases: PhaseEvent[] = [];
     const cb: StepCallbacks = { onStream: () => {}, onTrace: () => {}, onPhase: (p) => phases.push(p) };
     const scenario = makeAgentScenario(new WalkLLM(), DOCS);
-    await scenario.next(cb);
+    // 4 next() calls = 1 full iteration (input → think → generate → act)
+    await scenario.next(cb); // input
+    await scenario.next(cb); // think
+    await scenario.next(cb); // generate
+    await scenario.next(cb); // act (search_corpus — non-terminal)
     const names = phases.map((p) => p.phase);
-    expect(names).toContain('receive');
+    expect(names).toContain('input');
     expect(names).toContain('think');
+    expect(names).toContain('generate');
     expect(names).toContain('act');
-    expect(names).toContain('observe');
-    // 'act' carries the tool name so the rail can highlight it.
+    // 'act' carries the tool name so the rail can highlight which tool ran.
     const act = phases.find((p) => p.phase === 'act');
     expect(act?.tool).toBe('search_corpus');
   });

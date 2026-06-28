@@ -178,7 +178,7 @@ describe('smoke: every scenario runs to completion', () => {
     expect(scenario.isFinished()).toBe(true);
   });
 
-  it('02 agent every step carries an input-prompt panel (A4: see the prompt)', async () => {
+  it('02 agent every INPUT-phase step carries an input-prompt panel (A4: see the prompt)', async () => {
     const scenario = makeAgentScenario(new FakeLLM(), DOCS);
     const steps: import('@/types').StepView[] = [];
     const cb: StepCallbacks = { onStream: () => {}, onTrace: () => {} };
@@ -186,9 +186,14 @@ describe('smoke: every scenario runs to completion', () => {
       steps.push(await scenario.next(cb));
     }
     expect(steps.length).toBeGreaterThan(0);
-    for (const step of steps) {
+    // With the per-phase design each next() advances ONE subphase.
+    // The 'input' subphase steps (Iter N · Input) carry both context + input panels.
+    // The 'think', 'generate', 'act' subphase steps carry their own panels only.
+    const inputPhaseSteps = steps.filter((s) => s.title.includes('· Input'));
+    expect(inputPhaseSteps.length).toBeGreaterThan(0);
+    for (const step of inputPhaseSteps) {
       const input = step.panels.find((p) => p.key === 'input');
-      expect(input, `step ${step.index} has an input panel`).toBeTruthy();
+      expect(input, `step ${step.index} (${step.title}) has an input panel`).toBeTruthy();
       // The input panel must actually contain the prompt text (system + context).
       // The SYSTEM section reflects the THINKING step's real framing.
       expect(input!.body).toContain('SYSTEM (thinking step):');
@@ -290,9 +295,13 @@ describe('smoke: 02 agent stall guard halts an infinitely-repeating model', () =
     }
 
     expect(scenario.isFinished()).toBe(true);
-    // The GUARD fires on the FIRST repeat (step 2) — strictly before the MAX_STEPS=6
-    // cap. If this ever needs all 6 steps, the guard regressed and the cap caught it.
-    expect(steps).toBeLessThanOrEqual(2);
+    // With the per-phase design each next() = ONE subphase. One full iteration =
+    // 4 calls (input/think/generate/act). The GUARD fires on the GENERATE phase of
+    // iteration 2 (after act of iter 1 fed the same tool call back). That's at most
+    // 4 (first iter) + 3 (input/think/generate of second iter) = 7 calls — still well
+    // before the MAX_STEPS=6 iteration cap (which would be 24+ calls). Assert strictly
+    // less than one full cap-worth.
+    expect(steps).toBeLessThanOrEqual(6 * 4);
     // It halted HONESTLY: a visible stall guardrail, and NO fabricated mark_done.
     expect(lastStep?.guardrail).toBe('loop_stalled');
     expect(lastStep?.panels.some((p) => p.key === 'stalled')).toBe(true);

@@ -1,16 +1,17 @@
 // scenarios/02_agent.ts — the classic auto-RAG agent loop (folder 02).
 //
-// Each Next press = ONE agent step:
-//   ① CONTEXT panel  (incident + summarized history — the model's working memory)
-//   ② THINKING stream (Gemma native thinking, streamed token-by-token)
-//   ③ DECISION stream (structured tool call, schema-validated, retried on failure)
-//   ④ OBSERVATION panel (the tool result — which FEEDS INTO the next step's context)
+// Each Next press = ONE subphase of the agent loop:
+//   input    — build context + input panel (working memory read)
+//   think    — stream Gemma native reasoning
+//   generate — structured tool call (schema-validated, retried on failure)
+//   act      — execute the tool → observation panel; terminal: conclusion
 //
-// Terminates on mark_done or maxSteps. Guardrails (whitelist refusal, budget cap,
-// dry-run, terminal) are enforced inside CorpusTools and surfaced via panels/trace.
+// 4 Next presses = 1 iteration. Terminates on mark_done or maxSteps.
+// Guardrails (whitelist refusal, budget cap, dry-run, terminal) are enforced
+// inside CorpusTools and surfaced via panels/trace.
 //
-// Mirrors reference/02_auto_rag_agent/{agent,prompts,tools}.py behavior, adapted to
-// the unified Scenario framework + browser LLM.
+// Mirrors reference/02_auto_rag_agent/{agent,prompts,tools}.py behavior, adapted
+// to the unified Scenario framework + browser LLM.
 
 import type { ChatMsg, Doc, LLM, ScenarioMeta, StepCallbacks, ToolCall } from '@/types';
 import { CorpusTools } from '@/lib/tools';
@@ -51,7 +52,9 @@ export class AgentScenario extends BaseScenario {
   readonly meta: ScenarioMeta = {
     id: '02_agent',
     title: 'Auto-RAG Agent',
-    subtitle: 'context-gather → think → decide → observe, on a leash',
+    subtitle: 'input → think → generate → act, one step at a time',
+    intro:
+      'A tool-using agent solves an incident by looping: it reads its working memory (input), thinks, generates ONE tool call, the harness acts, and the result feeds the next input. It picks one tool at a time on a leash (max 6 turns) and ends with a stated root cause + remediation. Watch the rail: only THINK and GENERATE are the model; ACT is the harness running your tool.',
     kind: 'agent',
     teaches: 'An agent picks ONE tool at a time and loops — think, act, observe — until it can answer.',
   };
@@ -59,11 +62,28 @@ export class AgentScenario extends BaseScenario {
   private llm: LLM;
   private tools: CorpusTools;
   private docs: Doc[];
+
+  // ─── Per-run history (for buildContext) ────────────────────────────────────
   private history: StepView[] = [];
-  // Stall guard state: signatures of every executed tool call, and a run of
-  // consecutive hard stalls. Both reset() with the rest of the run.
+
+  // ─── Stall guard state ─────────────────────────────────────────────────────
+  // Signatures of every executed tool call, and a run of consecutive hard stalls.
+  // Both reset() with the rest of the run.
   private priorSignatures: string[] = [];
   private consecutiveStalls = 0;
+
+  // ─── Subphase state: cycling across next() calls ───────────────────────────
+  private iteration = 0;
+  private subphase: 'input' | 'think' | 'generate' | 'act' = 'input';
+
+  // Fields that carry intermediate work between the 4 subphases of one iteration.
+  private _context = '';
+  private _contextPanel: ReturnType<typeof makePanel> | null = null;
+  private _inputPanel: ReturnType<typeof makePanel> | null = null;
+  private _decision: ToolCall | null = null;
+  private _decisionPanel: ReturnType<typeof makePanel> | null = null;
+  private _decisionStreamId: string | undefined = undefined;
+  private _guardrail: string | undefined = undefined;
 
   constructor(llm: LLM, docs: Doc[]) {
     super();
@@ -81,64 +101,90 @@ export class AgentScenario extends BaseScenario {
     this.history = [];
     this.priorSignatures = [];
     this.consecutiveStalls = 0;
+    this.iteration = 0;
+    this.subphase = 'input';
+    this._context = '';
+    this._contextPanel = null;
+    this._inputPanel = null;
+    this._decision = null;
+    this._decisionPanel = null;
+    this._decisionStreamId = undefined;
+    this._guardrail = undefined;
     this.tools = new CorpusTools(this.docs, { maxCalls: MAX_STEPS + 4 });
   }
 
   protected async runStep(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
-    this.trace.spanOpen('agent_step', { step: stepIndex });
+    switch (this.subphase) {
+      case 'input':
+        return this._runInput(stepIndex, cb);
+      case 'think':
+        return this._runThink(stepIndex, cb);
+      case 'generate':
+        return this._runGenerate(stepIndex, cb);
+      case 'act':
+        return this._runAct(stepIndex, cb);
+    }
+  }
 
-    // ① CONTEXT — incident + summarized history (the loop's closure: prior
-    //    observations flow in here).
+  // ─── INPUT subphase ────────────────────────────────────────────────────────
+  // Build the agent's working memory: incident + prior observations. Show both
+  // context and input panels so the user can read WHAT the model receives before
+  // anything streams.
+  private _runInput(stepIndex: number, cb: StepCallbacks): StepResult {
+    this.iteration += 1;
+    this.trace.spanOpen('agent_step_input', { iteration: this.iteration });
+
+    // ① CONTEXT — incident + summarized prior history (the loop's closure).
     const context = buildContext(INCIDENT_QUESTION, this.history);
     const contextPanel = makePanel('context', codeTitle('Context'), context, 'ctx');
     this.trace.step('context', { chars: context.length });
-
-    // Emit the CONTEXT block to the live step RIGHT NOW — this is the STARTING block
-    // the user reads BEFORE anything streams. Without this, the step opened straight
-    // into the Thinking box; the context only appeared at commit. (Bug: "这应该是起始
-    // block，这个block之后才会thinking".)
     cb.onPanel?.(contextPanel);
-    // RECEIVE — the step has read its working memory (incident + prior observations);
-    // light the Receive node with the 1-based iteration so the rail shows the loop turn.
-    cb.onPhase?.({ phase: 'receive', iteration: stepIndex + 1 });
 
-    const messages: ChatMsg[] = [
-      { role: 'system', content: systemPrompt() },
-      { role: 'user', content: context },
-    ];
-
-    // ①ᵇ INPUT — the prompt handed to the model for THIS step's THINKING stream,
-    //    shown before the Thinking box so you can read what the model is reacting to
-    //    (not just its output). Honest: the SYSTEM section is thinkingSystemPrompt()
-    //    — the LIGHT framing the thinking step actually receives (no numbered
-    //    OPERATING_PROCEDURE) — plus the context + thinking nudge. A trailing NOTE
-    //    discloses that the DECISION step (next) uses the fuller systemPrompt()
-    //    framing (numbered OPERATING PROCEDURE + tool menu). Showing the real prompt
-    //    per step is the whole lesson, so this panel must match what each step reads.
+    // ①ᵇ INPUT — the prompt handed to the model for the THINKING stream.
+    //    Shows the real prompt before thinking starts (honest: thinkingSystemPrompt
+    //    framing, without the numbered OPERATING_PROCEDURE that governs GENERATE).
     const thinkNudge = thinkingInstruction();
     const inputText =
       `SYSTEM (thinking step):\n${thinkingSystemPrompt()}\n\n` +
       `USER (context / working memory):\n${context}\n\n` +
       `USER (this step):\n${thinkNudge}\n\n` +
-      `NOTE: the DECISION step (next) swaps in the full systemPrompt() — it adds the ` +
+      `NOTE: the GENERATE step (next) swaps in the full systemPrompt() — it adds the ` +
       `numbered OPERATING PROCEDURE + the tool menu that constrain the tool call.`;
     const inputPanel = makePanel('input', codeTitle('Input prompt → model'), inputText, 'ctx');
     this.trace.step('input', { chars: inputText.length }, inputText);
-    // Emit the INPUT prompt block too, still BEFORE thinking starts.
     cb.onPanel?.(inputPanel);
 
-    // ② THINKING — stream Gemma's native reasoning. Append a thinking instruction
-    //    so the model reasons briefly about ONLY its single next action.
-    //    The THINKING step uses a LIGHTER system framing (thinkingSystemPrompt) that
-    //    deliberately OMITS the numbered OPERATING_PROCEDURE: handing a small model a
-    //    numbered plan every turn made it echo that plan back as a long "Thinking
-    //    Process: 1… 2… 3…" instead of reasoning about only the next action. The full
-    //    procedure + tool constraints still govern the DECISION step below.
+    // Emit INPUT phase so the rail lights the Input node with the iteration number.
+    cb.onPhase?.({ phase: 'input', iteration: this.iteration });
+
+    // Persist across phases.
+    this._context = context;
+    this._contextPanel = contextPanel;
+    this._inputPanel = inputPanel;
+    this._guardrail = undefined;
+
+    this.trace.spanClose({ outcome: 'input_done' });
+    this.subphase = 'think';
+
+    const step = makeStep(stepIndex, `Iter ${this.iteration} · Input`, {
+      panels: [contextPanel, inputPanel],
+    });
+    return { step, done: false };
+  }
+
+  // ─── THINK subphase ────────────────────────────────────────────────────────
+  // Stream Gemma's native reasoning. runStream(mode:'think') internally emits
+  // cb.onPhase?.({ phase: 'think' }) so we get that for free.
+  private async _runThink(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    this.trace.spanOpen('agent_step_think', { iteration: this.iteration });
+
+    const thinkNudge = thinkingInstruction();
     const thinkMessages: ChatMsg[] = [
       { role: 'system', content: thinkingSystemPrompt() },
-      { role: 'user', content: context },
+      { role: 'user', content: this._context },
       { role: 'user', content: thinkNudge },
     ];
+    // runStream with mode:'think' emits cb.onPhase?.({ phase: 'think' }) internally.
     await runStream({
       llm: this.llm,
       messages: thinkMessages,
@@ -150,11 +196,27 @@ export class AgentScenario extends BaseScenario {
       traceStep: 'thinking',
     });
 
-    // ③ DECISION — structured tool call (schema-validated, retried).
+    this.trace.spanClose({ outcome: 'think_done' });
+    this.subphase = 'generate';
+
+    const step = makeStep(stepIndex, `Iter ${this.iteration} · Think`, { panels: [] });
+    return { step, done: false };
+  }
+
+  // ─── GENERATE subphase ─────────────────────────────────────────────────────
+  // Structured tool call (schema-validated, retried). Includes stall guard logic.
+  private async _runGenerate(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    this.trace.spanOpen('agent_step_generate', { iteration: this.iteration });
+
+    const messages: ChatMsg[] = [
+      { role: 'system', content: systemPrompt() },
+      { role: 'user', content: this._context },
+    ];
     const decideMsgs: ChatMsg[] = [
       ...messages,
-      { role: 'user', content: decideInstruction(stepIndex, MAX_STEPS) },
+      { role: 'user', content: decideInstruction(this.iteration - 1, MAX_STEPS) },
     ];
+
     let decision: ToolCall;
     let guardrail: string | undefined;
     let decisionStreamId: string | undefined;
@@ -179,21 +241,16 @@ export class AgentScenario extends BaseScenario {
         `(failed to produce a valid decision: ${err instanceof Error ? err.message : String(err)})`,
         'tool',
       );
-      const step = makeStep(stepIndex, 'Thinking + Decide', {
-        panels: [contextPanel, inputPanel, panel],
+      cb.onPhase?.({ phase: 'generate' });
+      const step = makeStep(stepIndex, `Iter ${this.iteration} · Generate`, {
+        panels: [panel],
         guardrail: 'retry',
       });
       this.history.push(step);
-      // Bail out of the run rather than spin.
       return { step, done: true };
     }
 
     // ─── STALL GUARD ──────────────────────────────────────────────────────────
-    // Honesty stance: a tiny greedy model can lock onto re-issuing the SAME tool
-    // call forever (the user watched search_corpus repeat n1…n36, never advancing).
-    // We detect that by canonical signature, give the model ONE corrective nudge to
-    // re-decide within this step, and if it STILL repeats we HALT and say so. We
-    // never fabricate a mark_done to make a stuck run look finished.
     const sig = toolCallSignature(decision);
     const isDuplicate = this.priorSignatures.includes(sig);
     if (isDuplicate) {
@@ -215,17 +272,12 @@ export class AgentScenario extends BaseScenario {
           schemaHint: decisionSchemaHint(),
           cb,
           trace: this.trace,
-          // Reuse the SAME decision box (id + label) so the corrective re-decide
-          // updates one box in place — we never want a second 'Decision' box. There
-          // is exactly ONE LLM decision box per step.
           label: llmTitle('Decision (raw output)'),
           streamId: decisionStreamId,
         });
         const reDecision = reRes.decision;
-        // (b) Did the nudge produce something genuinely new?
         const sig2 = toolCallSignature(reDecision);
         if (!this.priorSignatures.includes(sig2)) {
-          // Recovered — proceed with the new decision as if it were the first.
           decision = reDecision;
           this.consecutiveStalls = 0;
           guardrail = 'loop_retry';
@@ -235,8 +287,7 @@ export class AgentScenario extends BaseScenario {
         // A thrown re-decide is itself a hard stall — fall through to (c).
       }
 
-      // (c) Still duplicate (or the re-decide threw): HARD STALL. Halt honestly —
-      //     no tool executed this step, no mark_done fabricated.
+      // (c) Still duplicate (or the re-decide threw): HARD STALL.
       if (!recovered) {
         this.consecutiveStalls += 1;
         this.trace.step('loop_stalled', { repeated: sig, attempts: this.consecutiveStalls });
@@ -256,21 +307,17 @@ export class AgentScenario extends BaseScenario {
             ') and made no new progress, so the harness halted the loop. No completion was fabricated — this is the real behavior of a small model that got stuck.',
           'observe',
         );
-        const step = makeStep(stepIndex, 'Thinking + Decide', {
-          panels: [contextPanel, inputPanel, repeatedDecisionPanel, stalledPanel],
+        cb.onPhase?.({ phase: 'generate' });
+        const step = makeStep(stepIndex, `Iter ${this.iteration} · Generate`, {
+          panels: [repeatedDecisionPanel, stalledPanel],
           guardrail: 'loop_stalled',
         });
         this.history.push(step);
-        // Terminate WITHOUT executing the duplicate tool and WITHOUT mark_done.
         return { step, done: true };
       }
     } else {
-      // Fresh action — clear any prior stall streak.
       this.consecutiveStalls = 0;
     }
-
-    // Record the executed signature BEFORE running the tool (normal/recovered path).
-    this.priorSignatures.push(toolCallSignature(decision));
 
     const decisionPanel = makePanel(
       'decision',
@@ -278,46 +325,81 @@ export class AgentScenario extends BaseScenario {
       `${decision.tool}(${JSON.stringify(decision.args)})`,
       'tool',
     );
-    // ACT — a concrete tool call was chosen; carry its name so the rail can highlight
-    // the tool the agent is about to run.
+    cb.onPhase?.({ phase: 'generate' });
+
+    // Persist for act phase.
+    this._decision = decision;
+    this._decisionPanel = decisionPanel;
+    this._decisionStreamId = decisionStreamId;
+    this._guardrail = guardrail;
+
+    this.trace.spanClose({ outcome: 'generate_done' });
+    this.subphase = 'act';
+
+    const step = makeStep(stepIndex, `Iter ${this.iteration} · Generate`, {
+      panels: [decisionPanel],
+      guardrail,
+    });
+    return { step, done: false };
+  }
+
+  // ─── ACT subphase ──────────────────────────────────────────────────────────
+  // Execute the tool, show observation. If terminal: write the conclusion and
+  // return done:true. Non-terminal: reset subphase to 'input' for next iteration.
+  private async _runAct(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    this.trace.spanOpen('agent_step_act', { iteration: this.iteration });
+
+    const decision = this._decision!;
+
+    // ACT phase event — the rail highlights the tool being executed.
     cb.onPhase?.({ phase: 'act', tool: decision.tool });
 
-    // ④ EXECUTE the tool → OBSERVATION.
+    // Record the executed signature BEFORE running the tool.
+    this.priorSignatures.push(toolCallSignature(decision));
+
+    // Execute the tool → OBSERVATION.
     const result = this.tools.call(decision);
     const okTag = result.ok ? 'ok' : 'REFUSED';
-    // A refused off-whitelist action is the injection/guardrail teaching beat.
+    let guardrail = this._guardrail;
     if (!result.ok && decision.tool === 'propose_action') guardrail = 'whitelist_blocked';
     const observationBody = `[${okTag}] ${result.message}` + summarizeData(result.data);
     const observationPanel = makePanel('observation', codeTitle('Observation'), observationBody, 'observe');
-    // OBSERVE — the tool ran and its result is now the agent's new evidence.
-    cb.onPhase?.({ phase: 'observe', tool: decision.tool });
     this.trace.step(
       'tool_call',
       { tool: decision.tool, ok: result.ok, message: result.message },
       JSON.stringify(result.data ?? {}, null, 2),
     );
 
-    this.trace.spanClose({ tool: decision.tool, ok: result.ok });
-
     // Terminal predicate: mark_done or hitting the step cap.
-    const done = this.tools.isDone() || stepIndex + 1 >= MAX_STEPS;
+    const isDone = this.tools.isDone() || this.iteration >= MAX_STEPS;
 
-    // When the loop ENDS, don't leave a dangling tool call — write the FINAL answer.
-    // A research/incident agent must conclude with a stated ROOT CAUSE + REMEDIATION
-    // grounded in the transcript, not stop on whatever tool happened to be last (the
-    // user's "应该给个 root cause 不是么?"). This mirrors 04_search's final synthesis,
-    // so every agent scenario ends the same way: a conclusion, not a dangling action.
-    const panels = [contextPanel, inputPanel, decisionPanel, observationPanel];
-    let title = 'Thinking + Decide';
-    if (done) {
-      const conclusion = await this.concludeAnswer(context, observationBody, decision, cb);
+    const panels = [observationPanel];
+    let title = `Iter ${this.iteration} · Act`;
+    if (isDone) {
+      const conclusion = await this.concludeAnswer(this._context, observationBody, decision, cb);
       panels.push(makePanel('conclusion', llmTitle('Conclusion — root cause & remediation'), conclusion, 'decide'));
-      title = this.tools.isDone() ? 'Conclude (model marked done)' : 'Conclude (budget reached)';
+      title = this.tools.isDone()
+        ? `Iter ${this.iteration} · Act (concluded)`
+        : `Iter ${this.iteration} · Act (budget reached)`;
     }
 
+    this.trace.spanClose({ tool: decision.tool, ok: result.ok });
+
     const step = makeStep(stepIndex, title, { panels, guardrail });
-    this.history.push(step);
-    return { step, done };
+
+    // Push to history so buildContext sees the observation in the next iteration.
+    // We include decision + observation panels so buildContext can extract them.
+    const historyStep = makeStep(stepIndex, title, {
+      panels: [this._decisionPanel!, observationPanel],
+      guardrail,
+    });
+    this.history.push(historyStep);
+
+    if (!isDone) {
+      this.subphase = 'input';
+    }
+
+    return { step, done: isDone };
   }
 
   /**
@@ -332,8 +414,6 @@ export class AgentScenario extends BaseScenario {
     lastDecision: ToolCall,
     cb: StepCallbacks,
   ): Promise<string> {
-    // The transcript = the running context (incident + prior tool→observation pairs)
-    // plus THIS step's last action+observation, which aren't in history yet.
     const transcript =
       `${latestContext}\n` +
       `- ${lastDecision.tool}(${JSON.stringify(lastDecision.args)})\n` +
@@ -384,15 +464,12 @@ export function summarizeData(data: unknown): string {
   // the progressive-disclosure lesson is about.
   if (typeof rec.body === 'string') {
     const body = rec.body.trim();
-    // Only prepend the title if the body doesn't already start with it (these docs
-    // are markdown that usually opens with `# <title>`) — avoids the doubled header.
     const title =
       typeof rec.title === 'string' && !body.startsWith('#') ? `# ${rec.title}\n` : '';
     return `\n${title}${body}`;
   }
 
-  // get_doc_summary → title + summary + tags shown cleanly (the old code dumped
-  // truncated JSON that cut off mid-field, e.g. `...tags":["shard`).
+  // get_doc_summary → title + summary + tags shown cleanly.
   if (typeof rec.summary === 'string') {
     const name = (rec.title as string) ?? (rec.id as string) ?? '';
     const tags = Array.isArray(rec.tags) ? ` [tags: ${(rec.tags as string[]).join(', ')}]` : '';
