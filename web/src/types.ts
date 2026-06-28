@@ -77,6 +77,8 @@ export interface ScenarioMeta {
   /** One-sentence "what this chapter teaches", shown ONLY on the Learn-landing card
    *  (the run view stays lean — no intro card). (§8) */
   teaches: string;
+  /** 2-3 paragraph scrollable intro shown at the top of the run view (tutorial onboarding). */
+  intro: string;
 }
 
 // ─── A single LLM streaming box within a step (requirement ①) ─────────────────
@@ -97,7 +99,7 @@ export interface LlmStream {
 
 // ─── Loop phases (drive the LoopRail; emitted as real execution happens) ──────
 
-export type LoopPhaseName = 'receive' | 'think' | 'act' | 'observe' | 'conclude';
+export type LoopPhaseName = 'input' | 'think' | 'generate' | 'act';
 
 /** A single phase transition the rail reflects. `tool` is set on 'act' so the rail
  *  can highlight the tool just called; `iteration` is the agent loop counter. */
@@ -106,6 +108,7 @@ export interface PhaseEvent {
   tool?: string;
   note?: string;
   iteration?: number;
+  stage?: number; // workflow: which named node is current (agents leave undefined)
 }
 
 // ─── Hierarchical trace line (requirement ③; mirrors shared/trace.py) ─────────
