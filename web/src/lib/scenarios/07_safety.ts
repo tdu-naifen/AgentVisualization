@@ -320,6 +320,8 @@ export class SafetyScenario extends BaseScenario {
     id: '07_safety',
     title: 'Safety Guardrails',
     subtitle: 'PII · injection · cost · the safety flywheel',
+    kind: 'workflow',
+    teaches: 'Safety is a design dimension: redact PII, fence untrusted text, cap cost, and grow a regression set.',
   };
 
   private llm: LLM;

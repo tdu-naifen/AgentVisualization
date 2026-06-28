@@ -46,6 +46,8 @@ const RAG_META: ScenarioMeta = {
   id: '01_rag',
   title: 'RAG Pipeline',
   subtitle: 'fixed Ingest → Retrieve → Reason → Validate',
+  kind: 'workflow',
+  teaches: 'Retrieve documents, put them in the model’s context, and let it answer — grounded and cited.',
 };
 
 export class RagScenario extends BaseScenario {

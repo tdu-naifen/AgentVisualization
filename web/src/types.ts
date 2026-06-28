@@ -56,7 +56,6 @@ export type ScenarioId =
   | '03_eval'
   | '04_search'
   | '05_validation'
-  | '06_compare'
   | '07_safety';
 
 export const SCENARIO_IDS: ScenarioId[] = [
@@ -65,7 +64,6 @@ export const SCENARIO_IDS: ScenarioId[] = [
   '03_eval',
   '04_search',
   '05_validation',
-  '06_compare',
   '07_safety',
 ];
 
@@ -73,6 +71,12 @@ export interface ScenarioMeta {
   id: ScenarioId;
   title: string;
   subtitle: string;
+  /** 'agent' loops (model decides each turn until terminal); 'workflow' is a fixed
+   *  pipeline (model fills exactly one stage). Drives the LoopRail's loop-back. */
+  kind: 'agent' | 'workflow';
+  /** One-sentence "what this chapter teaches", shown ONLY on the Learn-landing card
+   *  (the run view stays lean — no intro card). (§8) */
+  teaches: string;
 }
 
 // ─── A single LLM streaming box within a step (requirement ①) ─────────────────
@@ -89,6 +93,19 @@ export interface LlmStream {
   /** accumulated streamed text */
   text: string;
   done: boolean;
+}
+
+// ─── Loop phases (drive the LoopRail; emitted as real execution happens) ──────
+
+export type LoopPhaseName = 'receive' | 'think' | 'act' | 'observe' | 'conclude';
+
+/** A single phase transition the rail reflects. `tool` is set on 'act' so the rail
+ *  can highlight the tool just called; `iteration` is the agent loop counter. */
+export interface PhaseEvent {
+  phase: LoopPhaseName;
+  tool?: string;
+  note?: string;
+  iteration?: number;
 }
 
 // ─── Hierarchical trace line (requirement ③; mirrors shared/trace.py) ─────────
@@ -173,6 +190,13 @@ export interface StepCallbacks {
    * Panels are keyed; re-emitting the same key updates in place (no duplicate).
    */
   onPanel?: (p: Panel) => void;
+  /**
+   * Emit a phase transition (receive/think/act/observe/conclude) as the step really
+   * executes, so the LoopRail can light the active node and highlight a called tool.
+   * Optional — scenarios that don't drive the rail and test stubs may omit it; emit
+   * as `cb.onPhase?.(p)`. Reflects REAL execution, never a scripted animation.
+   */
+  onPhase?: (p: PhaseEvent) => void;
 }
 
 /**

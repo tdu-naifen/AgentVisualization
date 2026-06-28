@@ -1,4 +1,4 @@
-// smoke.test.ts — drive ALL 7 scenarios to completion with a fake LLM.
+// smoke.test.ts — drive ALL 6 scenarios to completion with a fake LLM.
 //
 // This is the runtime safety net the project relied on during development (the
 // real Gemma model never loads in a test/dev context). It instantiates every
@@ -22,7 +22,6 @@ import { makeAgentScenario } from '@/lib/scenarios/02_agent';
 import { makeEvalScenario } from '@/lib/scenarios/03_eval';
 import { makeSearchScenario } from '@/lib/scenarios/04_search';
 import { makeValidationScenario } from '@/lib/scenarios/05_validation';
-import { makeCompareScenario } from '@/lib/scenarios/06_compare';
 import { makeSafetyScenario } from '@/lib/scenarios/07_safety';
 
 const CORPUS_PATH = fileURLToPath(new URL('../public/corpus.json', import.meta.url));
@@ -107,7 +106,6 @@ const FACTORIES: Array<{ id: string; make: (llm: LLM, docs: Doc[]) => Scenario }
   { id: '03_eval', make: makeEvalScenario },
   { id: '04_search', make: makeSearchScenario },
   { id: '05_validation', make: makeValidationScenario },
-  { id: '06_compare', make: makeCompareScenario },
   { id: '07_safety', make: makeSafetyScenario },
 ];
 

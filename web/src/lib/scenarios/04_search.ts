@@ -150,6 +150,8 @@ export class SearchScenario extends BaseScenario {
     id: '04_search',
     title: 'Autonomous Search Agent',
     subtitle: 'act until a terminal state — or the budget stops you',
+    kind: 'agent',
+    teaches: 'An autonomous agent acts until a terminal predicate is met — or an explicit step budget stops it.',
   };
 
   private llm: LLM;

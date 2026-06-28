@@ -215,6 +215,8 @@ export class ValidationScenario extends BaseScenario {
     id: '05_validation',
     title: 'Validation Chain',
     subtitle: 'climb the ladder, cheapest rung first; fail closed',
+    kind: 'workflow',
+    teaches: 'Climb a validation ladder, cheapest check first, and fail closed when a rung doesn’t pass.',
   };
 
   private llm: LLM;

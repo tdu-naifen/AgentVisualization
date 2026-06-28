@@ -51,6 +51,8 @@ export class AgentScenario extends BaseScenario {
     id: '02_agent',
     title: 'Auto-RAG Agent',
     subtitle: 'context-gather → think → decide → observe, on a leash',
+    kind: 'agent',
+    teaches: 'An agent picks ONE tool at a time and loops — think, act, observe — until it can answer.',
   };
 
   private llm: LLM;

@@ -22,7 +22,6 @@ import { makeAgentScenario } from '@/lib/scenarios/02_agent';
 import { makeEvalScenario } from '@/lib/scenarios/03_eval';
 import { makeSearchScenario } from '@/lib/scenarios/04_search';
 import { makeValidationScenario } from '@/lib/scenarios/05_validation';
-import { makeCompareScenario } from '@/lib/scenarios/06_compare';
 import { makeSafetyScenario } from '@/lib/scenarios/07_safety';
 import type {
   Doc,
@@ -102,8 +101,6 @@ export default function Home() {
         return makeSearchScenario(llm, docs);
       case '05_validation':
         return makeValidationScenario(llm, docs);
-      case '06_compare':
-        return makeCompareScenario(llm, docs);
       case '07_safety':
         return makeSafetyScenario(llm, docs);
       default:

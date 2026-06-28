@@ -59,6 +59,8 @@ export class EvalScenario extends BaseScenario {
     id: '03_eval',
     title: 'Evaluation Hierarchy',
     subtitle: 'climb the pyramid: reference → verifiable → judge → human',
+    kind: 'workflow',
+    teaches: 'Climb the evaluation pyramid only as far as the task forces you: cheap metrics first, judge last.',
   };
 
   private llm: LLM;
