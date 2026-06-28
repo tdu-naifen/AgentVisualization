@@ -5,13 +5,11 @@
 // (search / fetch / mark_done), the agent acts until the search space reaches a
 // terminal state — or the step budget halts it.
 //
-// Each Next press = ONE agent action:
-//   ① THINKING stream  — the model reasons about what evidence it still needs.
-//   ② the HARNESS deterministically performs the next action from the FIXTURE
-//      (search adds distinct source URLs to the frontier; the model later PROPOSES
-//      mark_done) — there is no real web search on a static site, so we drive a
-//      small committed fixture, mirroring how the Python uses fixture.json.
-//   ③ the HARNESS checks the terminal predicate it owns (NOT the model).
+// Each Next press = ONE phase of one agent iteration:
+//   input    — the harness builds the frontier+log prompt and shows what the model reads.
+//   generate — the model reasons about what to do (streams live) and proposes an action.
+//   act      — the harness executes the action against the fixture, checks the terminal
+//               predicate it owns (NOT the model), and may synthesize a final answer.
 //
 // Two endings, same machinery:
 //   • SUCCESS  — predicate met (≥ MIN_SOURCES distinct sources AND a proposed
@@ -22,7 +20,7 @@
 // Mirrors reference/04_autonomous_search_agent/{tools,prompts,agent}.py behavior,
 // adapted to the unified Scenario framework + browser LLM.
 
-import type { ChatMsg, Doc, LLM, ScenarioMeta, StepCallbacks } from '@/types';
+import type { ChatMsg, Doc, LLM, Panel, ScenarioMeta, StepCallbacks } from '@/types';
 import { cleanModelText } from '@/lib/llm';
 import {
   BaseScenario,
@@ -152,6 +150,7 @@ export class SearchScenario extends BaseScenario {
     subtitle: 'act until a terminal state — or the budget stops you',
     kind: 'agent',
     teaches: 'An autonomous agent acts until a terminal predicate is met — or an explicit step budget stops it.',
+    intro: 'An autonomous research agent acts until it has enough evidence — or a step budget stops it. It reads its frontier (input), generates a search/done decision, the harness runs it (act), and sources accumulate. The harness OWNS the stop condition: ≥2 distinct sources AND the model proposes done. Watch the budget halt it even if it never converges.',
   };
 
   private llm: LLM;
@@ -161,6 +160,15 @@ export class SearchScenario extends BaseScenario {
   private transcript: string[] = []; // working memory: prior (action → observation) lines
   private usedQueries = new Set<string>(); // fixture queries already run
   private signaledDone = false; // the model PROPOSED mark_done (harness still verifies)
+
+  // ── subphase pointer: each next() advances ONE phase ─────────────────────────
+  private subphase: 'input' | 'generate' | 'act' = 'input';
+  /** User-visible 1-based loop iteration counter (distinct from base stepIndex). */
+  private stepNum = 1;
+  /** Messages built in input phase, consumed in generate phase. */
+  private pendingMessages: ChatMsg[] | null = null;
+  /** Decision from generate phase, consumed in act phase. */
+  private pendingDecision: SearchDecision | null = null;
 
   constructor(llm: LLM, docs: Doc[]) {
     super();
@@ -179,16 +187,30 @@ export class SearchScenario extends BaseScenario {
     this.transcript = [];
     this.usedQueries = new Set();
     this.signaledDone = false;
+    this.subphase = 'input';
+    this.stepNum = 1;
+    this.pendingMessages = null;
+    this.pendingDecision = null;
   }
 
   protected async runStep(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
-    const stepNum = stepIndex + 1;
-    this.trace.spanOpen('action', { step: stepNum });
-    // RECEIVE — the step has read the frontier + research log; light the Receive node
-    // with the 1-based step as the loop iteration.
-    cb.onPhase?.({ phase: 'receive', iteration: stepNum });
+    switch (this.subphase) {
+      case 'input':    return this.runInputPhase(stepIndex, cb);
+      case 'generate': return this.runGeneratePhase(stepIndex, cb);
+      case 'act':      return this.runActPhase(stepIndex, cb);
+    }
+  }
 
-    // ── working memory: the frontier so far (this is the loop's closure) ──
+  // ── INPUT phase: show what the model will read this iteration ─────────────────
+
+  private async runInputPhase(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    const stepNum = this.stepNum;
+    this.trace.spanOpen('action', { step: stepNum });
+
+    // INPUT — light the Input node with the 1-based iteration counter.
+    cb.onPhase?.({ phase: 'input', iteration: stepNum });
+
+    // Build the frontier+log prompt; carry it to the generate phase.
     const frontierBefore = this.frontierText();
     const log = this.transcript.length > 0 ? this.transcript.join('\n') : '(no actions yet)';
     const stillNeed = Math.max(0, MIN_SOURCES - this.sources.length);
@@ -196,14 +218,12 @@ export class SearchScenario extends BaseScenario {
       (b) => b.query,
     );
 
-    // When the threshold is already met, stop nagging for more sources — NUDGE the
-    // model to PROPOSE mark_done (the harness still owns + verifies the predicate).
     const statusLine =
       stillNeed > 0
         ? `Step ${stepNum}/${MAX_STEPS}. You still need ${stillNeed} more distinct source(s) before you may answer.`
         : `Step ${stepNum}/${MAX_STEPS}. You now have ${this.sources.length} distinct sources — that meets the threshold of ${MIN_SOURCES}. Do NOT search again. Propose mark_done now so the harness can verify and answer.`;
 
-    const messages: ChatMsg[] = [
+    this.pendingMessages = [
       { role: 'system', content: systemPrompt() },
       {
         role: 'user',
@@ -220,10 +240,8 @@ export class SearchScenario extends BaseScenario {
       },
     ];
 
-    // ①ᵇ INPUT — a READ-ONLY view of the prompt the model reads THIS step: the
-    //    question plus a note that it picks ONE action from the frontier + log above.
-    //    Shown FIRST (StepView's INPUT_KEYS renders 'input' panels at the top) so the
-    //    step opens with its starting context, not straight into the decision box.
+    // Show the input prompt panel BEFORE the model streams, so the step opens with
+    // starting context, not straight into the decision box.
     const inputPanel = makePanel(
       'input',
       codeTitle('Input prompt → model'),
@@ -232,26 +250,57 @@ export class SearchScenario extends BaseScenario {
     );
     cb.onPanel?.(inputPanel);
 
-    // The model picks ONE action (web_search / mark_done). There is no separate
-    // "thinking" step here — this task is a short act-until-terminal loop, and a
-    // pure reasoning monologue every step added noise without changing the decision
-    // (the model's reasoning still streams live INSIDE the decision box). The
-    // harness then executes the choice and checks the terminal predicate it owns.
-    const decision = await this.decideAction(messages, cb);
+    this.subphase = 'generate';
+    return {
+      step: makeStep(stepIndex, `Step ${stepNum} · Input`, { panels: [inputPanel] }),
+      done: false,
+    };
+  }
 
-    // ③ the HARNESS executes the model's chosen action against the fixture.
+  // ── GENERATE phase: model streams its action decision ─────────────────────────
+
+  private async runGeneratePhase(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    const stepNum = this.stepNum;
+    const messages = this.pendingMessages!;
+
+    // Model decides the next action (streams live inside the decision box).
+    const decision = await this.decideAction(messages, cb);
+    this.pendingDecision = decision;
+
+    // Show the parsed decision — what the model proposed, before harness execution.
+    const decisionBody =
+      `Model proposed: ${decision.action}` +
+      (decision.query ? `\nQuery: "${decision.query}"` : '') +
+      (decision.matchedFixture === false
+        ? '\n(query will be mapped to nearest fixture — no live web on static site)'
+        : '');
+    const decisionPanel: Panel = makePanel('decision', codeTitle('Parsed action'), decisionBody, 'tool');
+
+    this.subphase = 'act';
+    return {
+      step: makeStep(stepIndex, `Step ${stepNum} · Generate`, { panels: [decisionPanel] }),
+      done: false,
+    };
+  }
+
+  // ── ACT phase: harness executes and checks the terminal predicate ──────────────
+
+  private async runActPhase(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
+    const stepNum = this.stepNum;
+    const decision = this.pendingDecision!;
+
+    // The harness executes the model's chosen action against the fixture.
     const plan = this.executeAction(decision);
-    // ACT + OBSERVE — the chosen action ran against the fixture and produced an
-    // observation; light both nodes carrying the executed tool name.
+
+    // ACT — the chosen action ran; light the Act node carrying the executed tool name.
     cb.onPhase?.({ phase: 'act', tool: plan.tool });
-    cb.onPhase?.({ phase: 'observe', tool: plan.tool });
     this.trace.step(
       'tool_call',
       { tool: plan.tool, frontier: this.sources.length },
       plan.observation,
     );
 
-    // ③ the HARNESS checks the terminal predicate it owns — NOT the model.
+    // The HARNESS checks the terminal predicate it owns — NOT the model.
     const gathered = this.sources.length;
     const terminal = this.signaledDone && gathered >= MIN_SOURCES;
     const budgetSpent = stepNum >= MAX_STEPS;
@@ -262,7 +311,7 @@ export class SearchScenario extends BaseScenario {
       terminal,
     });
 
-    // ── panels (frontier 'ctx', parsed action 'tool', terminal-check 'observe') ──
+    // ── panels: frontier (ctx), executed decision (tool), terminal-check (observe) ──
     const frontierPanel = makePanel(
       'frontier',
       codeTitle('Search frontier'),
@@ -294,30 +343,23 @@ export class SearchScenario extends BaseScenario {
         : `${MAX_STEPS - stepNum} action(s) of budget remaining`);
     const budgetPanel = makePanel('budget', codeTitle('Budget'), budgetBody, 'observe');
 
-    const panels = [inputPanel, frontierPanel, decisionPanel, terminalPanel, budgetPanel];
+    const panels = [frontierPanel, decisionPanel, terminalPanel, budgetPanel];
 
     // ── resolve the ending: SUCCESS (predicate) or BUDGET EXHAUSTION ──
     let done = false;
     let guardrail: string | undefined;
-    let title = `Step ${stepNum}: ${plan.tool}`;
 
     if (terminal) {
       done = true;
-      title = `Step ${stepNum}: goal reached`;
-      // SYNTHESIZE the answer with the MODEL from the gathered source snippets —
-      // this is the whole point of a research agent: it READS what it found and
-      // writes a grounded, cited answer. (Previously this pushed a hardcoded
-      // string, so the model's generation never appeared — the user's "generate
-      // 的结果去哪里了?".) The streamed box persists via the framework merge.
+      // SYNTHESIZE the answer with the MODEL from the gathered source snippets.
       const answerText = await this.synthesizeAnswer(cb);
       const answerBody =
         (answerText.trim() || '(model produced no answer)') +
         `\n\nSources:\n${this.frontierText()}`;
-      panels.push(makePanel('answer', llmTitle('Answer (cited)'), answerBody, 'observe'));
+      panels.push(makePanel('answer', llmTitle('Answer (cited)'), answerBody, 'generate'));
     } else if (budgetSpent) {
       done = true;
       guardrail = 'budget';
-      title = `Step ${stepNum}: budget exhausted`;
       panels.push(
         makePanel(
           'handoff',
@@ -331,8 +373,15 @@ export class SearchScenario extends BaseScenario {
     }
 
     this.trace.spanClose({ tool: plan.tool, terminal, budgetSpent });
-    const step = makeStep(stepIndex, title, { panels, guardrail });
-    return { step, done };
+
+    // Advance stepNum for the NEXT iteration's input phase.
+    this.stepNum += 1;
+    this.subphase = 'input';
+
+    return {
+      step: makeStep(stepIndex, `Step ${stepNum} · Act`, { panels, guardrail }),
+      done,
+    };
   }
 
   /**
@@ -356,9 +405,9 @@ export class SearchScenario extends BaseScenario {
     ];
     const stream = makeStream('Decision', 'decision');
     cb.onStream({ ...stream });
-    // THINK — the decision stream opening IS this scenario's reasoning starting (its
-    // 'thinking' streams live inside the decision box); light the Think node now.
-    cb.onPhase?.({ phase: 'think' });
+    // GENERATE — the decision stream opening IS this scenario's generation starting;
+    // light the Generate node now.
+    cb.onPhase?.({ phase: 'generate' });
     let raw = '';
     // Reuse llm.stream for free-form structured output (decide() is locked to the
     // 6 corpus tools; this scenario has its own action set, so we parse ourselves).
