@@ -17,6 +17,7 @@ import TracePanel from '@/components/TracePanel';
 import { mockScenarioMetas } from '@/components/mockState';
 import { GemmaLLM } from '@/lib/llm';
 import { loadCorpus } from '@/lib/corpus';
+import { isCancelled } from '@/lib/cancel';
 import { makeRagScenario } from '@/lib/scenarios/01_rag';
 import { makeAgentScenario } from '@/lib/scenarios/02_agent';
 import { makeEvalScenario } from '@/lib/scenarios/03_eval';
@@ -60,6 +61,10 @@ export default function Home() {
   // latest value without stale closures.
   const [auto, setAuto] = useState(false);
   const autoRef = useRef(false);
+  // Generation epoch: bumped on pause / scenario-switch / reset. onNext captures it
+  // before awaiting and DISCARDS its result if the epoch changed meanwhile — so a
+  // cancelled or switched-away generation can't commit onto the new state.
+  const epochRef = useRef(0);
   // Trace→step jump: a transient highlight (which committed step + which block to
   // flash) that the trace panel sets when a line is clicked. The left column is an
   // append-only chronological timeline; clicking SCROLLS to the step's box.
@@ -126,8 +131,11 @@ export default function Home() {
   const selectScenario = useCallback((id: ScenarioId) => {
     autoRef.current = false;
     setAuto(false);
-    setActiveId(id);
+    epochRef.current += 1; // invalidate any in-flight step
+    llmRef.current?.cancel(); // stop streaming from the old scenario
+    scenarioRef.current?.reset();
     scenarioRef.current = null;
+    setActiveId(id);
     setState(emptyState(id));
     setRunning(false);
     setHighlight(null);
@@ -156,6 +164,7 @@ export default function Home() {
 
     setRunning(true);
     setState((s) => ({ ...s, phase: 'running', error: null }));
+    const startEpoch = epochRef.current;
     // A new step is starting — stick to the newest step at the bottom again.
     followRef.current = true;
     setFollowing(true);
@@ -179,6 +188,10 @@ export default function Home() {
 
     try {
       const step: StepView = await scenario.next(cb);
+      // If we were cancelled or switched away while awaiting, drop this result.
+      if (epochRef.current !== startEpoch) {
+        return { finished: false, ok: false };
+      }
       const finished = scenario.isFinished();
       // Stamp every trace line from THIS step with the committed step index, so a
       // click in the trace panel can jump to this step's blocks on the left. We
@@ -222,6 +235,10 @@ export default function Home() {
       });
       return { finished, ok: true };
     } catch (err) {
+      if (isCancelled(err) || epochRef.current !== startEpoch) {
+        // Paused / switched: drop the partial step, no error banner.
+        return { finished: false, ok: false };
+      }
       // Even on failure, commit whatever real trace lines were produced — we do
       // not hide a failed run; we show exactly what happened up to the error.
       const stamped = pendingTrace.map((l) => ({ ...l, stepIndex: state.steps.length }));
@@ -263,6 +280,8 @@ export default function Home() {
   const pauseAuto = useCallback(() => {
     autoRef.current = false;
     setAuto(false);
+    epochRef.current += 1; // invalidate the in-flight step
+    llmRef.current?.cancel(); // stop token streaming NOW
   }, []);
 
   // Trace→step jump: scroll the timeline to the clicked line's committed step box
@@ -285,6 +304,8 @@ export default function Home() {
   const onReset = useCallback(() => {
     autoRef.current = false;
     setAuto(false);
+    epochRef.current += 1;
+    llmRef.current?.cancel();
     scenarioRef.current?.reset();
     scenarioRef.current = null;
     setState(emptyState(activeId));
