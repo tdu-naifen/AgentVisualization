@@ -1,0 +1,90 @@
+'use client';
+
+// LearnView — the concept landing. Teaches the loop once (what receive/think/act/
+// observe mean; tool/trace/guardrail), then lists scenarios as cards in two groups:
+// Agents (loop) vs Workflows (pipeline). Clicking a card opens its live run.
+
+import { motion } from 'framer-motion';
+import type { ScenarioMeta, ScenarioId } from '@/types';
+import { RAIL_NODES } from '@/lib/scenarioPhases';
+
+export default function LearnView({
+  scenarios,
+  onOpen,
+}: {
+  scenarios: ScenarioMeta[];
+  onOpen: (id: ScenarioId) => void;
+}) {
+  const agents = scenarios.filter((s) => s.kind === 'agent');
+  const workflows = scenarios.filter((s) => s.kind === 'workflow');
+
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <section className="rounded-xl border border-line bg-bg-panel/60 p-5">
+        <h2 className="mb-2 text-base font-bold text-ink-base">What is an agent loop?</h2>
+        <p className="mb-3 text-[13px] leading-relaxed text-ink-dim">
+          An agent solves a task by looping: it <b className="text-ctx">receives</b> context,{' '}
+          <b className="text-think">thinks</b>, <b className="text-tool">acts</b> by calling a tool,
+          and <b className="text-observe">observes</b> the result — then loops again until it is done.
+          A <b>tool</b> is a function the model may call. A <b>trace</b> is the recorded log of every
+          step. A <b>guardrail</b> stops an unsafe or runaway action.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {RAIL_NODES.map((n, i) => (
+            <span key={n.phase} className="flex items-center gap-2">
+              <span className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-ink-base">
+                {n.label}
+              </span>
+              {i < RAIL_NODES.length - 1 && <span className="text-ink-faint">→</span>}
+            </span>
+          ))}
+          <span className="text-decide">↺</span>
+        </div>
+      </section>
+
+      <CardGroup title="Agents — they loop until done" subtitle="the model decides the next move each turn" items={agents} onOpen={onOpen} />
+      <CardGroup title="Workflows — fixed pipelines" subtitle="deterministic stages; the model fills one slot" items={workflows} onOpen={onOpen} />
+    </div>
+  );
+}
+
+function CardGroup({
+  title,
+  subtitle,
+  items,
+  onOpen,
+}: {
+  title: string;
+  subtitle: string;
+  items: ScenarioMeta[];
+  onOpen: (id: ScenarioId) => void;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <div>
+        <h3 className="text-sm font-bold text-ink-base">{title}</h3>
+        <p className="text-[11px] text-ink-faint">{subtitle}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {items.map((s) => (
+          <motion.button
+            key={s.id}
+            type="button"
+            onClick={() => onOpen(s.id)}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            className="rounded-lg border border-line bg-bg-card/50 p-3 text-left transition-colors hover:border-decide/50"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-semibold text-ink-base">{s.title}</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${s.kind === 'agent' ? 'bg-decide/15 text-decide' : 'bg-ctx/15 text-ctx'}`}>
+                {s.kind}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-ink-dim">{s.teaches}</p>
+          </motion.button>
+        ))}
+      </div>
+    </section>
+  );
+}

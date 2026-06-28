@@ -14,6 +14,8 @@ import ModelLoader from '@/components/ModelLoader';
 import StepViewPanel from '@/components/StepView';
 import Controls from '@/components/Controls';
 import TracePanel from '@/components/TracePanel';
+import LoopRail from '@/components/LoopRail';
+import LearnView from '@/components/LearnView';
 import { mockScenarioMetas } from '@/components/mockState';
 import { GemmaLLM } from '@/lib/llm';
 import { loadCorpus } from '@/lib/corpus';
@@ -29,6 +31,7 @@ import type {
   LlmStream,
   LoopState,
   Panel,
+  PhaseEvent,
   Scenario,
   ScenarioId,
   StepView,
@@ -61,6 +64,12 @@ export default function Home() {
   // latest value without stale closures.
   const [auto, setAuto] = useState(false);
   const autoRef = useRef(false);
+  // view toggle (in-memory, no router): the concept landing vs a live run. The rail
+  // mirrors the current run's REAL phase: activePhase pulses the active node and
+  // iteration counts agent loop turns (both driven by onPhase events below).
+  const [view, setView] = useState<'learn' | 'run'>('learn');
+  const [activePhase, setActivePhase] = useState<PhaseEvent | null>(null);
+  const [iteration, setIteration] = useState(1);
   // Generation epoch: bumped on pause / scenario-switch / reset. onNext captures it
   // before awaiting and DISCARDS its result if the epoch changed meanwhile — so a
   // cancelled or switched-away generation can't commit onto the new state.
@@ -142,7 +151,18 @@ export default function Home() {
     stepNodes.current.clear();
     followRef.current = true;
     setFollowing(true);
+    setActivePhase(null);
+    setIteration(1);
   }, []);
+
+  // Open a scenario from the landing: switch to it (which cancels any in-flight run
+  // via the epoch bump), reset the rail, and flip to the run view.
+  const openScenario = useCallback((id: ScenarioId) => {
+    selectScenario(id);
+    setActivePhase(null);
+    setIteration(1);
+    setView('run');
+  }, [selectScenario]);
 
   const onNext = useCallback(async (): Promise<{ finished: boolean; ok: boolean }> => {
     if (running || state.finished) return { finished: state.finished, ok: false };
@@ -185,6 +205,11 @@ export default function Home() {
       },
       onTrace: (line: TraceLine) => {
         pendingTrace.push(line);
+      },
+      onPhase: (p: PhaseEvent) => {
+        if (epochRef.current !== startEpoch) return;
+        setActivePhase(p);
+        if (p.phase === 'receive' && typeof p.iteration === 'number') setIteration(p.iteration);
       },
     };
 
@@ -235,6 +260,7 @@ export default function Home() {
           trace: [...s.trace, ...stamped],
         };
       });
+      if (finished) setActivePhase(null);
       return { finished, ok: true };
     } catch (err) {
       if (isCancelled(err) || epochRef.current !== startEpoch) {
@@ -353,9 +379,26 @@ export default function Home() {
       onSelect={selectScenario}
       modelLoader={modelLoader}
     >
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_minmax(320px,420px)]">
-        {/* main: controls + the chronological, scrollable step timeline */}
-        <section className="flex min-h-0 min-w-0 flex-col gap-4">
+      {view === 'learn' ? (
+        <LearnView scenarios={SCENARIOS} onOpen={openScenario} />
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setView('learn')}
+            className="mb-3 text-[12px] text-decide hover:underline"
+          >
+            ← Concept
+          </button>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[136px_1fr_minmax(300px,400px)]">
+            {/* rail: the live agent loop, driven by REAL onPhase events */}
+            <aside className="hidden lg:block">
+              <div className="sticky top-4">
+                <LoopRail scenarioId={activeId} active={activePhase} iteration={iteration} running={running} />
+              </div>
+            </aside>
+            {/* main: controls + the chronological, scrollable step timeline */}
+            <section className="flex min-h-0 min-w-0 flex-col gap-4">
           <Controls
             phase={state.phase}
             finished={state.finished}
@@ -423,7 +466,9 @@ export default function Home() {
         <aside className="min-w-0">
           <TracePanel trace={state.trace} onJump={onJump} />
         </aside>
-      </div>
+          </div>
+        </>
+      )}
     </AppShell>
   );
 }
