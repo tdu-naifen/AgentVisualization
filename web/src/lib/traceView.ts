@@ -11,7 +11,7 @@
 // no model) so they are unit-testable and safe to import anywhere.
 
 /**
- * Human-readable labels for span/step identifiers used across all 7 scenarios.
+ * Human-readable labels for span/step identifiers used across all scenarios.
  * Keep keys in sync with the names passed to TraceBuilder.spanOpen()/step() and the
  * `traceStep` option of runStream/runDecide. An unmapped name falls back to a
  * title-cased version of the identifier, so a new step is never shown as raw snake.

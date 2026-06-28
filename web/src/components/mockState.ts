@@ -16,7 +16,7 @@ import type {
 // ─── scenario metadata (all 6, plausible English titles/subtitles) ────────────
 export function mockScenarioMetas(): ScenarioMeta[] {
   return [
-    { id: '01_rag', title: 'RAG Pipeline', subtitle: 'fixed retrieve → reason → validate — a pipeline, not an agent', kind: 'workflow', teaches: 'Retrieve documents, put them in the model’s context, and let it answer — grounded and cited.' },
+    { id: '01_rag', title: 'RAG Pipeline', subtitle: 'fixed retrieve → reason → answer — a pipeline, not an agent', kind: 'workflow', teaches: 'Retrieve documents, put them in the model’s context, and let it answer — grounded and cited.' },
     { id: '02_agent', title: 'Tool-Using Agent', subtitle: 'the agent loop: gather context, think, decide a tool, observe', kind: 'agent', teaches: 'An agent picks ONE tool at a time and loops — think, act, observe — until it can answer.' },
     { id: '03_eval', title: 'Evaluating Agents', subtitle: 'the eval pyramid: metrics → LLM-as-judge → human calibration', kind: 'workflow', teaches: 'Climb the evaluation pyramid only as far as the task forces you: cheap metrics first, judge last.' },
     { id: '04_search', title: 'Autonomous Search', subtitle: 'act until a terminal state — bounded by an explicit budget', kind: 'agent', teaches: 'An autonomous agent acts until a terminal predicate is met — or an explicit step budget stops it.' },

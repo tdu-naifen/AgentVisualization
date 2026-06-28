@@ -212,7 +212,7 @@ export async function runDecide(opts: RunDecideOpts): Promise<RunDecideResult> {
 
 // ─── honesty helpers: one consistent "who produced this" vocabulary ───────────
 //
-// Every block is labeled by its SOURCE, the SAME way across all 7 scenarios:
+// Every block is labeled by its SOURCE, the SAME way across all scenarios:
 //   • content the MODEL produced          → title "LLM · <name>"   (llmTitle)
 //   • content deterministic CODE produced → title "Code · <name>"  (codeTitle)
 // For an inline mid-sentence mark (e.g. "…REAL model output [LLM]") use the TAG_*

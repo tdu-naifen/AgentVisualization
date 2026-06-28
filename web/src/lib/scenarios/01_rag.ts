@@ -4,7 +4,7 @@
 //
 //   ① Retrieve  BM25 rank a planted query     (deterministic — NO model)
 //   ② Reason    copilot answers from context  (the ONE model call — streamed)
-//   ③ Validate  a pure citation gate          (deterministic — NO model)
+//   ③ Answer    lead with the model's answer; a citation gate runs behind it (NO model)
 //
 // This is the plain story of a RAG system: RETRIEVE the relevant docs, put them in
 // the model's CONTEXT, and let it SUMMARIZE/answer — grounded and cited. (We do not
@@ -45,7 +45,7 @@ const GROUNDING_K = 3;
 const RAG_META: ScenarioMeta = {
   id: '01_rag',
   title: 'RAG Pipeline',
-  subtitle: 'fixed Ingest → Retrieve → Reason → Validate',
+  subtitle: 'fixed Retrieve → Reason → Answer',
   kind: 'workflow',
   teaches: 'Retrieve documents, put them in the model’s context, and let it answer — grounded and cited.',
 };
@@ -69,7 +69,7 @@ export class RagScenario extends BaseScenario {
   // ─ state threaded across the four next() calls ─
   /** Retrieve → Reason/Validate: the ranked hits (ids + scores). */
   private hits: ReturnType<typeof rankDocs> = [];
-  /** Reason → Validate: the streamed answer text the gate inspects. */
+  /** Reason → Answer: the streamed answer text the citation gate inspects. */
   private answer = '';
 
   constructor(llm: LLM, docs: Doc[]) {

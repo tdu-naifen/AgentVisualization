@@ -1,7 +1,7 @@
 // types.ts — THE CONTRACT. Every module depends on these. Field names are fixed;
 // implementers must not rename them (parallel modules wire against this file).
 //
-// Scope (PLAN §2): a unified step-driven framework for all 7 scenarios (01–07).
+// Scope (PLAN §2): a unified step-driven framework for all 6 scenarios.
 // The old fixed four-block StepView (context/thinking/decision/observation) is now
 // a *special case* of 02 — expressed via `streams[]` + `panels[]` below.
 
@@ -48,7 +48,7 @@ export interface Doc {
   body: string;
 }
 
-// ─── Scenario abstraction: one framework, 7 implementations ───────────────────
+// ─── Scenario abstraction: one framework, 6 implementations ───────────────────
 
 export type ScenarioId =
   | '01_rag'
@@ -81,7 +81,7 @@ export interface ScenarioMeta {
 
 // ─── A single LLM streaming box within a step (requirement ①) ─────────────────
 // A step may have 0..N of these (e.g. a pure-retrieval step has 0; an
-// agent step has Thinking + Decision; 06 has two columns each streaming).
+// agent step has Thinking + Decision; a pure-retrieval step has none).
 
 export type LlmStreamKind = 'thinking' | 'decision' | 'generation' | 'judge' | 'other';
 
@@ -207,7 +207,7 @@ export interface StepCallbacks {
 
 /**
  * The unified scenario interface. The framework (UI + driver) depends ONLY on
- * this; each of the 7 scenarios implements one. They share the LLM / retrieval /
+ * this; each of the 6 scenarios implements one. They share the LLM / retrieval /
  * trace base but are otherwise decoupled → parallel-implementable.
  */
 export interface Scenario {
