@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import type { StepView as StepViewModel, Panel } from '@/types';
 import StreamBox from './StreamBox';
 import PanelBody from './PanelBody';
+import InfoHover from './InfoHover';
 
 // ─── accent token mapping (flexible: scenario authors may use either name) ─────
 type AccentTokens = { text: string; border: string; chip: string; rgb: string | null };
@@ -84,8 +85,9 @@ function PanelBlock({ panel, highlighted }: { panel: Panel; highlighted?: boolea
               : undefined
         }
       >
-        <div className={`mb-1 text-[10px] font-semibold uppercase tracking-wider ${t.text}`}>
-          {panel.label}
+        <div className={`mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider ${t.text}`}>
+          <span>{panel.label}</span>
+          {panel.hint && <InfoHover text={panel.hint} />}
         </div>
         {/* Bounded, internally-scrollable body — keeps a tall panel (input prompt /
             full doc body) from stretching the whole step past the viewport. */}
@@ -130,6 +132,7 @@ export default function StepView({
           {step.index + 1}
         </span>
         <h2 className="text-sm font-semibold text-ink-base">{step.title}</h2>
+        {step.hint && <InfoHover text={step.hint} />}
         {step.guardrail && (
           <motion.span
             initial={{ opacity: 0, scale: 0.9 }}
