@@ -385,7 +385,10 @@ export default function Home() {
         <>
           <button
             type="button"
-            onClick={() => setView('learn')}
+            onClick={() => {
+              pauseAuto(); // stop any in-flight run so we don't leak WebGPU compute on the Learn page
+              setView('learn');
+            }}
             className="mb-3 text-[12px] text-decide hover:underline"
           >
             ← Concept
