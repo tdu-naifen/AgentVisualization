@@ -37,19 +37,6 @@ export default function AppShell({
               Agent Loop Explainer 🧠
             </h1>
             {active && <p className="text-[12px] text-ink-dim">{active.subtitle}</p>}
-            {/* Honest framing, always visible: the model runs in YOUR browser and
-                tools are called in-process (a function call, not MCP / no server). */}
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-line bg-bg-card/40 px-2 py-0.5 text-[10px] text-ink-faint">
-                Gemma 4 in-browser · WebGPU
-              </span>
-              <span className="rounded-full border border-line bg-bg-card/40 px-2 py-0.5 text-[10px] text-ink-faint">
-                in-process tool use · no server
-              </span>
-              <span className="rounded-full border border-decide/30 bg-decide/10 px-2 py-0.5 text-[10px] text-decide">
-                the model really decides
-              </span>
-            </div>
           </div>
           <div className="shrink-0">{modelLoader}</div>
         </header>

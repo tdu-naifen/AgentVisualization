@@ -142,6 +142,9 @@ export interface Panel {
   /** optional accent token for color-coding (e.g. 'cyan' | 'green' | 'pink' | 'amber') */
   accent?: string;
   body: string;
+  /** Optional TEACHING prose shown on hover (workflows). NEVER rendered into body —
+   *  data panels show only real data; explanation lives here (§8). */
+  hint?: string;
 }
 
 // ─── A step's unified view (replaces the old fixed four-block StepView) ────────
@@ -156,6 +159,9 @@ export interface StepView {
   panels: Panel[];
   /** if a guardrail fired this step: 'retry' | 'whitelist_blocked' | 'budget' | ... */
   guardrail?: string;
+  /** Optional step-level TEACHING prose shown on hover of the step title (workflows
+   *  explain "what is this step doing" here, not in panel bodies). (§8) */
+  hint?: string;
 }
 
 export type LoopPhase = 'idle' | 'running' | 'step_done' | 'finished' | 'error';

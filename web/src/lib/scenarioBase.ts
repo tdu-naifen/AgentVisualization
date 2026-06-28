@@ -59,14 +59,18 @@ export function makePanel(
   label: string,
   body: string,
   accent?: string,
+  hint?: string,
 ): Panel {
-  return { key, label, body, accent };
+  const panel: Panel = { key, label, body };
+  if (accent) panel.accent = accent;
+  if (hint) panel.hint = hint;
+  return panel;
 }
 
 export function makeStep(
   index: number,
   title: string,
-  opts?: { streams?: LlmStream[]; panels?: Panel[]; guardrail?: string },
+  opts?: { streams?: LlmStream[]; panels?: Panel[]; guardrail?: string; hint?: string },
 ): StepView {
   const step: StepView = {
     index,
@@ -75,6 +79,7 @@ export function makeStep(
     panels: opts?.panels ?? [],
   };
   if (opts?.guardrail) step.guardrail = opts.guardrail;
+  if (opts?.hint) step.hint = opts.hint;
   return step;
 }
 
