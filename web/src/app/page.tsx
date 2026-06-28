@@ -209,7 +209,7 @@ export default function Home() {
       onPhase: (p: PhaseEvent) => {
         if (epochRef.current !== startEpoch) return;
         setActivePhase(p);
-        if (p.phase === 'receive' && typeof p.iteration === 'number') setIteration(p.iteration);
+        if (p.phase === 'input' && typeof p.iteration === 'number') setIteration(p.iteration);
       },
     };
 
@@ -260,7 +260,6 @@ export default function Home() {
           trace: [...s.trace, ...stamped],
         };
       });
-      if (finished) setActivePhase(null);
       return { finished, ok: true };
     } catch (err) {
       if (isCancelled(err) || epochRef.current !== startEpoch) {
