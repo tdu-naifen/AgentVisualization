@@ -78,11 +78,8 @@ export class AgentScenario extends BaseScenario {
 
   // Fields that carry intermediate work between the 4 subphases of one iteration.
   private _context = '';
-  private _contextPanel: ReturnType<typeof makePanel> | null = null;
-  private _inputPanel: ReturnType<typeof makePanel> | null = null;
   private _decision: ToolCall | null = null;
   private _decisionPanel: ReturnType<typeof makePanel> | null = null;
-  private _decisionStreamId: string | undefined = undefined;
   private _guardrail: string | undefined = undefined;
 
   constructor(llm: LLM, docs: Doc[]) {
@@ -104,11 +101,8 @@ export class AgentScenario extends BaseScenario {
     this.iteration = 0;
     this.subphase = 'input';
     this._context = '';
-    this._contextPanel = null;
-    this._inputPanel = null;
     this._decision = null;
     this._decisionPanel = null;
-    this._decisionStreamId = undefined;
     this._guardrail = undefined;
     this.tools = new CorpusTools(this.docs, { maxCalls: MAX_STEPS + 4 });
   }
@@ -159,8 +153,6 @@ export class AgentScenario extends BaseScenario {
 
     // Persist across phases.
     this._context = context;
-    this._contextPanel = contextPanel;
-    this._inputPanel = inputPanel;
     this._guardrail = undefined;
 
     this.trace.spanClose({ outcome: 'input_done' });
@@ -330,7 +322,6 @@ export class AgentScenario extends BaseScenario {
     // Persist for act phase.
     this._decision = decision;
     this._decisionPanel = decisionPanel;
-    this._decisionStreamId = decisionStreamId;
     this._guardrail = guardrail;
 
     this.trace.spanClose({ outcome: 'generate_done' });
