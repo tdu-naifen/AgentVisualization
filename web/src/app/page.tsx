@@ -374,9 +374,7 @@ export default function Home() {
 
   return (
     <AppShell
-      scenarios={SCENARIOS}
-      activeId={activeId}
-      onSelect={selectScenario}
+      subtitle={view === 'run' ? SCENARIOS.find((s) => s.id === activeId)?.subtitle : undefined}
       modelLoader={modelLoader}
     >
       {view === 'learn' ? (

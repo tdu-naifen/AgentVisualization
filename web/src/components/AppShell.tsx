@@ -1,32 +1,19 @@
 'use client';
 
-// AppShell — overall layout + scenario switcher.
-//
-// Top bar: gradient app title, a horizontal row of scenario pill tabs (active =
-// teal filled, inactive = outlined), and the `modelLoader` node pinned
-// top-right. Below: a content area that renders `children` (the step view +
-// trace panel). AppShell just frames it — `children` decides the inner layout.
-
-import { motion } from 'framer-motion';
-import type { ScenarioMeta, ScenarioId } from '@/types';
+// AppShell — the overall page frame: app title (+ an optional one-line subtitle)
+// and the `modelLoader` pinned top-right, then the content area below. Scenario
+// SELECTION lives in the content itself (the Learn landing's grouped cards); the
+// old pill-tab row was removed because it duplicated those cards on the Learn page.
+// AppShell just frames — `children` decides the inner layout.
 
 interface AppShellProps {
-  scenarios: ScenarioMeta[];
-  activeId: ScenarioId;
-  onSelect: (id: ScenarioId) => void;
+  /** optional one-line subtitle under the title (e.g. the active scenario's, shown in run view) */
+  subtitle?: string;
   modelLoader: React.ReactNode;
   children: React.ReactNode;
 }
 
-export default function AppShell({
-  scenarios,
-  activeId,
-  onSelect,
-  modelLoader,
-  children,
-}: AppShellProps) {
-  const active = scenarios.find((s) => s.id === activeId);
-
+export default function AppShell({ subtitle, modelLoader, children }: AppShellProps) {
   return (
     <div className="min-h-screen bg-app text-ink-base">
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6">
@@ -36,35 +23,10 @@ export default function AppShell({
             <h1 className="bg-accent bg-clip-text text-2xl font-bold tracking-tight text-transparent">
               Agent Loop Explainer 🧠
             </h1>
-            {active && <p className="text-[12px] text-ink-dim">{active.subtitle}</p>}
+            {subtitle && <p className="text-[12px] text-ink-dim">{subtitle}</p>}
           </div>
           <div className="shrink-0">{modelLoader}</div>
         </header>
-
-        {/* ── scenario pill tabs ────────────────────────────────────────── */}
-        <nav className="flex flex-wrap gap-2">
-          {scenarios.map((s) => {
-            const isActive = s.id === activeId;
-            return (
-              <motion.button
-                key={s.id}
-                type="button"
-                onClick={() => onSelect(s.id)}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                aria-pressed={isActive}
-                title={s.subtitle}
-                className={`rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
-                  isActive
-                    ? 'bg-decide text-bg-base shadow-neon'
-                    : 'border border-line text-ink-dim hover:text-ink-base'
-                }`}
-              >
-                {s.title}
-              </motion.button>
-            );
-          })}
-        </nav>
 
         {/* ── content ───────────────────────────────────────────────────── */}
         <main className="flex-1">{children}</main>
