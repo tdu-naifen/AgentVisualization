@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Doc, LLM, StepCallbacks, ToolCall, TraceLine } from '@/types';
 import { CancelledError } from '@/lib/cancel';
 import { makeAgentScenario } from '@/lib/scenarios/02_agent';
+import { railFor, RAIL_NODES } from '@/lib/scenarioPhases';
 
 const DOCS: Doc[] = JSON.parse(
   readFileSync(fileURLToPath(new URL('../public/corpus.json', import.meta.url)), 'utf8'),
@@ -37,5 +38,25 @@ describe('cancellation surfaces as a clean terminal (not an error)', () => {
     // these assertions fail on the pre-Task-4 source — that's what gives them teeth.
     expect(traceLines.some((l) => l.event === 'step' && l.step === 'error')).toBe(false);
     expect(traceLines.at(-1)).toMatchObject({ event: 'trace_end', data: { cancelled: true } });
+  });
+});
+
+describe('scenarioPhases metadata', () => {
+  it('agents loop, workflows do not', () => {
+    expect(railFor('02_agent').kind).toBe('agent');
+    expect(railFor('04_search').kind).toBe('agent');
+    expect(railFor('01_rag').kind).toBe('workflow');
+    expect(railFor('03_eval').kind).toBe('workflow');
+    expect(railFor('05_validation').kind).toBe('workflow');
+    expect(railFor('07_safety').kind).toBe('workflow');
+  });
+
+  it('agents light all four loop nodes', () => {
+    const nodes = railFor('02_agent').nodes;
+    expect(nodes).toEqual(['receive', 'think', 'act', 'observe']);
+  });
+
+  it('RAIL_NODES is the canonical ordering', () => {
+    expect(RAIL_NODES.map((n) => n.phase)).toEqual(['receive', 'think', 'act', 'observe']);
   });
 });
