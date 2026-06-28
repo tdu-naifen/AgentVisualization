@@ -127,19 +127,13 @@ export class EvalScenario extends BaseScenario {
       'ctx',
     );
 
-    const blindPanel = makePanel(
-      'l1-blindspot',
-      'Blind spot → why we must climb',
-      'The candidate is a CORRECT paraphrase, yet it fails exact-match outright and ' +
-        `scores only F1 ${pct(r.f1)}. Reference metrics are PARAPHRASE-BLIND: they ` +
-        'reward word reuse, not meaning. Cheap and objective, but they grade surface ' +
-        'form — so the moment answers are open-ended, L1 goes blind and forces L2.',
-      'ctx',
-    );
-
     this.trace.spanClose({ f1: r.f1, exact_match: exact });
     return makeStep(stepIndex, 'L1 · Reference-based (exact-match / ROUGE)', {
-      panels: [this.pyramidPanel(1), scoresPanel, blindPanel],
+      panels: [this.pyramidPanel(1), scoresPanel],
+      hint:
+        'The candidate is a CORRECT paraphrase yet fails exact-match and scores low ROUGE F1. ' +
+        'Reference metrics are paraphrase-blind: they reward word reuse, not meaning — which is ' +
+        'why open-ended answers force the next level up.',
     });
   }
 
@@ -177,20 +171,14 @@ export class EvalScenario extends BaseScenario {
       'ctx',
     );
 
-    const whyPanel = makePanel(
-      'l2-why',
-      'Blind spot → why we must climb',
-      'Splitting the stages localizes failure: a retriever can "succeed" (return a ' +
-        'doc) while handing generation semantically wrong context — metrics look fine, ' +
-        'the answer breaks. But faithfulness/relevance still need ground-truth docs or ' +
-        'a runnable output. For an open-ended answer with no key to grade against, even ' +
-        'L2 runs out — which forces the judge (L3).',
-      'ctx',
-    );
-
     this.trace.spanClose({ recall_at_5: 0.978, faithfulness_hallucinated: 0.19 });
     return makeStep(stepIndex, 'L2 · Task-verifiable (retrieval + faithfulness)', {
-      panels: [this.pyramidPanel(2), splitPanel, whyPanel],
+      panels: [this.pyramidPanel(2), splitPanel],
+      hint:
+        'Splitting the stages localizes failure: a retriever can "succeed" (return a doc) while ' +
+        'handing generation semantically wrong context — metrics look fine, the answer breaks. ' +
+        'But faithfulness/relevance still need ground-truth docs or a runnable output. For an ' +
+        'open-ended answer with no key to grade against, even L2 runs out — which forces the judge (L3).',
     });
   }
 
@@ -241,8 +229,7 @@ export class EvalScenario extends BaseScenario {
             ? 'The judge scored the paraphrase below the pass bar — judges are biased, which '
             : 'No machine-readable score came back this run — a judge is a model, so it can '
         ) +
-        'needs NO reference key: it reads the rubric and reasons about meaning. That is why ' +
-        'eval can scale here — but a judge is itself a biased model, which is why L4 calibrates it.',
+        'needs NO reference key: it reads the rubric and reasons about meaning.',
       'decide',
     );
 
@@ -269,6 +256,9 @@ export class EvalScenario extends BaseScenario {
     return makeStep(stepIndex, 'L3 · LLM-as-judge (rubric scoring)', {
       streams: [stream],
       panels: [this.pyramidPanel(3), verdictPanel, failurePanel],
+      hint:
+        'That is why eval can scale here — a judge needs no reference key — but a judge is itself ' +
+        'a biased model, which is why L4 calibrates it.',
     });
   }
 
@@ -306,19 +296,13 @@ export class EvalScenario extends BaseScenario {
       'observe',
     );
 
-    const receiptPanel = makePanel(
-      'l4-receipt',
-      'The one-liner to land',
-      'An uncalibrated judge is just another unevaluated model — κ is its receipt. ' +
-        'Human labels are the calibration gold standard: expensive and slow, so you ' +
-        "don't grade everything with them — you spend a small set to CALIBRATE the L3 " +
-        'judge, report κ, and pin the judge version. That closes the pyramid.',
-      'observe',
-    );
-
     this.trace.spanClose({ kappa: k.kappa });
     return makeStep(stepIndex, 'L4 · Human eval (Cohen\'s κ) — pyramid complete', {
-      panels: [this.pyramidPanel(4), kappaPanel, receiptPanel],
+      panels: [this.pyramidPanel(4), kappaPanel],
+      hint:
+        'An uncalibrated judge is just another unevaluated model — κ is its receipt. Human labels ' +
+        'are the calibration gold standard: expensive and slow, so you spend a small set to ' +
+        'CALIBRATE the L3 judge, report κ, and pin the judge version. That closes the pyramid.',
     });
   }
 
