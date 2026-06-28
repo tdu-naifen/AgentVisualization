@@ -29,6 +29,7 @@ import type {
 } from '@/types';
 import { TraceBuilder } from '@/lib/trace';
 import { cleanModelText } from '@/lib/llm';
+import { isCancelled } from '@/lib/cancel';
 
 // ─── id + small builders ──────────────────────────────────────────────────────
 
@@ -318,6 +319,15 @@ export abstract class BaseScenario implements Scenario {
     try {
       result = await this.runStep(index, cb);
     } catch (err) {
+      // A cancellation (user pause / scenario switch) is NOT a failure: don't record
+      // an error line or a red banner. End the trace as cancelled and rethrow the
+      // sentinel so the UI drops the partial step.
+      if (isCancelled(err)) {
+        this.finished = true;
+        this.trace.end({ cancelled: true });
+        this.flushTrace(cb);
+        throw err;
+      }
       this.trace.step('error', { message: err instanceof Error ? err.message : String(err) });
       this.flushTrace(cb);
       this.finished = true;
