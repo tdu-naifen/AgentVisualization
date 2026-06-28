@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { ChatMsg, Doc, LLM, StepCallbacks, ToolCall } from '@/types';
+import type { Doc, LLM, StepCallbacks, ToolCall, TraceLine } from '@/types';
 import { CancelledError } from '@/lib/cancel';
 import { makeAgentScenario } from '@/lib/scenarios/02_agent';
 
@@ -23,10 +23,19 @@ class CancellingLLM implements LLM {
 describe('cancellation surfaces as a clean terminal (not an error)', () => {
   it('02 agent: a cancelled think() rejects with CancelledError and finishes the run', async () => {
     const scenario = makeAgentScenario(new CancellingLLM(), DOCS);
-    const cb: StepCallbacks = { onStream: () => {}, onTrace: () => {} };
+    // Capture the trace lines so we can prove WHICH terminal the cancel produced —
+    // not just that next() rejected (the old catch block rejected + finished too).
+    const traceLines: TraceLine[] = [];
+    const cb: StepCallbacks = { onStream: () => {}, onTrace: (l) => traceLines.push(l) };
     await expect(scenario.next(cb)).rejects.toBeInstanceOf(CancelledError);
     // After a cancel, the scenario is finished (the loop won't spin) and produced no
     // committed step the caller must show.
     expect(scenario.isFinished()).toBe(true);
+    // Prove the NEW cancel branch, not the pre-existing rethrow: a cancel must NOT
+    // record an `error` step line, and the trace must end cleanly as { cancelled: true }.
+    // The OLD catch emitted a 'step'/'error' line and ended { error: true }, so BOTH of
+    // these assertions fail on the pre-Task-4 source — that's what gives them teeth.
+    expect(traceLines.some((l) => l.event === 'step' && l.step === 'error')).toBe(false);
+    expect(traceLines.at(-1)).toMatchObject({ event: 'trace_end', data: { cancelled: true } });
   });
 });
