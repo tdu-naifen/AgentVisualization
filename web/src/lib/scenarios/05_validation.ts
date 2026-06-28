@@ -271,10 +271,12 @@ export class ValidationScenario extends BaseScenario {
     const body = passed
       ? 'PASS — required fields present, types & enums valid.\n' +
         'checked: name · metric · comparator∈{>,>=,<,<=} · threshold:number · ' +
-        'window_minutes:int 1..1440 · aggregation∈{avg,max,min,sum}\n\n' +
-        'Teaching: schema proves well-FORMED, not well-AIMED. The threshold of 130 is ' +
-        'operational nonsense yet PASSES here — lint (next rung) is what catches that.'
+        'window_minutes:int 1..1440 · aggregation∈{avg,max,min,sum}'
       : `FAIL\n- ${errors.join('\n- ')}`;
+
+    const hint =
+      'Schema proves well-FORMED, not well-AIMED. The threshold of 130 is operational ' +
+      'nonsense yet PASSES here — lint (next rung) is what catches that.';
 
     const panels = [
       makePanel(
@@ -285,7 +287,7 @@ export class ValidationScenario extends BaseScenario {
       ),
       makePanel('schema', codeTitle('rung 1 · schema  (structural)'), body, 'ctx'),
     ];
-    return { step: makeStep(0, 'rung 1 · schema', { panels }), done: false };
+    return { step: makeStep(0, 'rung 1 · schema', { panels, hint }), done: false };
   }
 
   // ② rung 1b — lint (domain sanity, no model). The teaching beat: the broken
@@ -313,25 +315,27 @@ export class ValidationScenario extends BaseScenario {
       `the config under test (synthesized earlier from "${REQUEST}"):\n` +
       `  threshold = ${brokenCfg.threshold}   on metric '${brokenCfg.metric}' (a 0..100 % metric)\n` +
       `  comparator = '${brokenCfg.comparator}'   (the direction it fires)\n\n` +
-      `→ FAIL\n- ${before.join('\n- ')}\n\n` +
-      `Why this matters: a CPU-percent alert with threshold ${brokenCfg.threshold} can NEVER fire ` +
-      `(CPU maxes at 100), so it's a silent dead monitor. Schema passed it — the value IS a number; ` +
-      `lint is the rung that knows "a % can't exceed 100."`;
+      `→ FAIL\n- ${before.join('\n- ')}`;
     const repairBody =
       `THE RETRY LOOP: feed the exact lint errors back to the generator → it regenerates.\n\n` +
       `repaired config:\n${fmt(this.candidate)}\n\n` +
       `re-lint: ${after.length === 0 ? 'PASS ✓' : 'FAIL'}  ` +
       `— threshold ${this.candidate.threshold} ∈ 0..100, comparator '${this.candidate.comparator}' now fires ` +
-      `when CPU is HIGH. This is the guardrail-retry beat: a cheap check rejects the artifact, ` +
-      `the errors become the fix, and we climb to the next rung. ` +
-      `(Datadog-style monitor config = the JSON an alerting system runs.)`;
+      `when CPU is HIGH.`;
+
+    const hint =
+      `A CPU-percent alert with threshold ${brokenCfg.threshold} can NEVER fire (CPU maxes at 100), ` +
+      `so it's a silent dead monitor: schema passed it because the value IS a number; lint is the rung ` +
+      `that knows "a % can't exceed 100." This is the guardrail-retry beat — a cheap check rejects the ` +
+      `artifact, the errors become the fix, and we climb to the next rung. (Datadog-style monitor ` +
+      `config = the JSON an alerting system runs.)`;
 
     const panels = [
       makePanel('lint-fail', codeTitle('rung 1b · lint — FAIL'), failBody, 'ctx'),
       makePanel('lint-repair', codeTitle('retry · feed errors back → regenerate'), repairBody, 'ctx'),
     ];
     return {
-      step: makeStep(1, 'rung 1b · lint (retry → repair)', { panels, guardrail: 'retry' }),
+      step: makeStep(1, 'rung 1b · lint (retry → repair)', { panels, guardrail: 'retry', hint }),
       done: false,
     };
   }
@@ -357,11 +361,13 @@ export class ValidationScenario extends BaseScenario {
       `${firesBad ? 'FIRES ✓ (caught)' : 'silent ✗ (false negative)'}\n` +
       `  known-GOOD [${REPLAY_GOOD.join(', ')}]  ${agg}=${goodVal.toFixed(1)} ${cmp} ${t} → ` +
       `${firesGood ? 'FIRES ✗ (false positive)' : 'silent ✓'}\n\n` +
-      `${passed ? 'PASS' : 'FAIL'} — catches the right-shape/too-lax-threshold config. Dry-run ` +
-      'BEFORE apply: applying a bad monitor to prod to "see if it works" IS the outage.';
+      `${passed ? 'PASS' : 'FAIL'} — catches the right-shape/too-lax-threshold config.`;
+
+    const hint =
+      'Dry-run BEFORE apply: applying a bad monitor to prod to "see if it works" IS the outage.';
 
     const panels = [makePanel('replay', codeTitle('rung 2 · replay / dry-run  (behavioural)'), body, 'ctx')];
-    return { step: makeStep(2, 'rung 2 · replay (dry-run)', { panels }), done: false };
+    return { step: makeStep(2, 'rung 2 · replay (dry-run)', { panels, hint }), done: false };
   }
 
   // ④ rung 3 — LLM judge (semantic intent match). The ONLY model rung, and it runs
@@ -439,14 +445,16 @@ export class ValidationScenario extends BaseScenario {
     const body =
       `${approved ? 'APPROVED' : 'REJECTED'} · score ${score}/5   ${source}\n` +
       `(${sourceNote}; metric '${this.candidate.metric}' covers request keyword(s) ` +
-      `[${heuristic.overlap.join(', ') || 'none'}])\n\n` +
+      `[${heuristic.overlap.join(', ') || 'none'}])`;
+
+    const hint =
       'The judge is the ONLY model rung and it runs LAST, by design. A judge is itself an ' +
       'unevaluated, biased model, so the verifiable rungs gate before it: it can never push a ' +
       'config to prod on its word alone, and it never overrides a hard replay failure. ' +
       "Judgment supplements verifiable checks; it doesn't replace them.";
 
     const panels = [makePanel('judge', llmTitle('rung 3 · LLM judge — semantic intent match'), body, 'decide')];
-    return { step: makeStep(3, 'rung 3 · LLM judge', { panels }), done: false };
+    return { step: makeStep(3, 'rung 3 · LLM judge', { panels, hint }), done: false };
   }
 
   // ⑤ rung 4 — human / outcome (no model). All green → AUTO-APPLY; otherwise fail
@@ -478,27 +486,26 @@ export class ValidationScenario extends BaseScenario {
         'Fail-closed path (NOT taken here): when retries don\'t converge, DEGRADE to a validated ' +
         `safe-default monitor (${SAFE_DEFAULT_CPU.metric} ${SAFE_DEFAULT_CPU.comparator} ` +
         `${SAFE_DEFAULT_CPU.threshold}, ${SAFE_DEFAULT_CPU.window_minutes}m) and ESCALATE to a human ` +
-        '— never ship the plausible-but-wrong artifact. A fallback you didn\'t validate is just ' +
-        'another bug, so the safe default itself re-climbs schema/lint/replay before it\'s trusted.'
+        '— never ship the plausible-but-wrong artifact.'
       : 'the model judge REJECTED the config → FAIL CLOSED (this is the safe outcome).\n' +
         `  rung 1 schema ✓   rung 1b lint ✓ (after 1 repair)   rung 2 replay ✓   rung 3 ${judgeTag}\n\n` +
         `→ DEGRADE to a validated safe-default monitor (${SAFE_DEFAULT_CPU.metric} ` +
         `${SAFE_DEFAULT_CPU.comparator} ${SAFE_DEFAULT_CPU.threshold}, ${SAFE_DEFAULT_CPU.window_minutes}m) ` +
         'and ESCALATE to a human. The verifiable rungs already passed, so we never SHIP nothing — we ' +
-        'ship the conservative default (itself re-validated) and let a human review. Fail closed, not open. ' +
-        'This is the honest branch: a real model rung means a real reject is possible, and the system ' +
-        'degrades safely instead of pretending everything is green.';
+        'ship the conservative default (itself re-validated) and let a human review.';
 
-    const teachingBody =
+    const hint =
       'Verifiable rungs (schema/lint/replay) gate BEFORE the judge, so a config can never reach ' +
       'prod on a biased judge\'s word alone. Each rung is cheaper than the failure it prevents ' +
-      'downstream. Fail closed, not open.';
+      'downstream. A fallback you didn\'t validate is just another bug, so the safe default itself ' +
+      're-climbs schema/lint/replay before it\'s trusted. This is the honest branch: a real model rung ' +
+      'means a real reject is possible, and the system degrades safely instead of pretending everything ' +
+      'is green. Fail closed, not open.';
 
     const panels = [
       makePanel('outcome', codeTitle('rung 4 · human / outcome'), outcomeBody, 'observe'),
-      makePanel('teaching', codeTitle('why this order (the point)'), teachingBody, 'observe'),
     ];
-    return { step: makeStep(4, 'rung 4 · human / outcome', { panels }), done: true };
+    return { step: makeStep(4, 'rung 4 · human / outcome', { panels, hint }), done: true };
   }
 }
 
