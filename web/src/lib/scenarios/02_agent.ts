@@ -33,6 +33,7 @@ import {
   decisionSchemaHint,
   systemPrompt,
   thinkingInstruction,
+  thinkingSystemPrompt,
 } from '@/lib/prompts';
 import type { StepView } from '@/types';
 
@@ -121,9 +122,19 @@ export class AgentScenario extends BaseScenario {
 
     // ② THINKING — stream Gemma's native reasoning. Append a thinking instruction
     //    so the model reasons briefly about ONLY its single next action.
+    //    The THINKING step uses a LIGHTER system framing (thinkingSystemPrompt) that
+    //    deliberately OMITS the numbered OPERATING_PROCEDURE: handing a small model a
+    //    numbered plan every turn made it echo that plan back as a long "Thinking
+    //    Process: 1… 2… 3…" instead of reasoning about only the next action. The full
+    //    procedure + tool constraints still govern the DECISION step below.
+    const thinkMessages: ChatMsg[] = [
+      { role: 'system', content: thinkingSystemPrompt() },
+      { role: 'user', content: context },
+      { role: 'user', content: thinkNudge },
+    ];
     await runStream({
       llm: this.llm,
-      messages: [...messages, { role: 'user', content: thinkNudge }],
+      messages: thinkMessages,
       label: llmTitle('Thinking'),
       kind: 'thinking',
       mode: 'think',

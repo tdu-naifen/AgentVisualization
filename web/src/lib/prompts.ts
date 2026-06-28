@@ -40,6 +40,23 @@ export function systemPrompt(): string {
 }
 
 /**
+ * A LIGHT system framing for the THINKING step. Unlike systemPrompt(), it deliberately
+ * OMITS the numbered OPERATING_PROCEDURE: handing a small model a numbered plan every
+ * turn makes it echo that plan back as a long "Thinking Process: 1… 2… 3…" instead of
+ * reasoning about only the next action. The full procedure + tool constraints still
+ * govern the DECISION step (which keeps systemPrompt()); thinking just needs the role
+ * + incident + the most-recent state, then a short forward nudge.
+ */
+export function thinkingSystemPrompt(): string {
+  return (
+    'You are an autonomous SRE incident agent working one step at a time. You are mid-investigation; ' +
+    'do NOT restate or re-plan the whole task. Reason ONLY about your single next action from the most ' +
+    'recent observation.\n\n' +
+    `INCIDENT: ${INCIDENT_QUESTION}`
+  );
+}
+
+/**
  * Build the per-step context (the agent's working memory): the incident + a
  * transcript of prior (tool -> observation) pairs. Handing this back each turn is
  * what lets a stateless model act multi-step (mirrors decide_prompt in prompts.py).
@@ -60,10 +77,10 @@ export function buildContext(question: string, history: StepView[]): string {
 /** The instruction for the native "thinking" step — keeps reasoning short + forward. */
 export function thinkingInstruction(): string {
   return (
-    'Think in 2-4 short sentences about ONLY your single next action, based on the ' +
-    'MOST RECENT observation above. Do not restate the incident or re-plan from ' +
-    'scratch; decide the one next tool call that makes new progress (open a specific ' +
-    'doc, propose an action, or finish).'
+    'In 2-4 short sentences, reason about ONLY your single next action, based on the MOST RECENT ' +
+    'observation above. Do NOT restate the incident, do NOT re-plan from scratch, and do NOT output a ' +
+    'numbered plan or "Thinking Process" list. Decide the one next tool call that makes new progress ' +
+    '(open a specific doc, propose an action, or finish).'
   );
 }
 

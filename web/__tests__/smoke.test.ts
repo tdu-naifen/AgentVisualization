@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { ChatMsg, Doc, LLM, Scenario, StepCallbacks, ToolCall, ToolName, TraceLine } from '@/types';
+import { thinkingInstruction, thinkingSystemPrompt, systemPrompt } from '@/lib/prompts';
 import { makeRagScenario } from '@/lib/scenarios/01_rag';
 import { makeAgentScenario } from '@/lib/scenarios/02_agent';
 import { makeEvalScenario } from '@/lib/scenarios/03_eval';
@@ -255,6 +256,18 @@ describe('smoke: every scenario runs to completion', () => {
       titles.push((await scenario.next(cb)).title);
     }
     expect(titles).toEqual(['Retrieve', 'Reason', 'Answer']); // no 'Ingest'; final step leads with the model answer
+  });
+
+  it('thinking prompt forbids re-planning and omits the numbered operating procedure', () => {
+    const instr = thinkingInstruction().toLowerCase();
+    // forbids the numbered-plan / re-plan behavior the user saw
+    expect(instr).toMatch(/numbered|thinking process|re-?plan|only/);
+    // the THINKING system framing must NOT carry the numbered operating procedure
+    const tsp = thinkingSystemPrompt();
+    expect(tsp).not.toContain('OPERATING PROCEDURE');
+    expect(tsp).not.toContain('1. search_corpus');
+    // but the DECISION-time systemPrompt STILL has the procedure (tool constraints live there)
+    expect(systemPrompt()).toContain('OPERATING PROCEDURE');
   });
 });
 
