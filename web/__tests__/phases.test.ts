@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Doc, LLM, StepCallbacks, ToolCall, TraceLine } from '@/types';
+import type { ChatMsg, Doc, LLM, PhaseEvent, StepCallbacks, ToolCall, TraceLine } from '@/types';
 import { CancelledError } from '@/lib/cancel';
 import { makeAgentScenario } from '@/lib/scenarios/02_agent';
+import { makeSearchScenario } from '@/lib/scenarios/04_search';
 import { railFor, RAIL_NODES } from '@/lib/scenarioPhases';
 
 const DOCS: Doc[] = JSON.parse(
@@ -58,5 +59,49 @@ describe('scenarioPhases metadata', () => {
 
   it('RAIL_NODES is the canonical ordering', () => {
     expect(RAIL_NODES.map((n) => n.phase)).toEqual(['receive', 'think', 'act', 'observe']);
+  });
+});
+
+// A minimal fake LLM that walks one search → mark_done so 02 finishes in 2 steps.
+class WalkLLM implements LLM {
+  private n = 0;
+  async load(): Promise<void> {}
+  ready(): boolean { return true; }
+  async stream(_m: ChatMsg[], onT: (t: string) => void): Promise<string> { onT('ok'); return 'ok'; }
+  async think(_m: ChatMsg[], onT: (t: string) => void): Promise<string> { onT('thinking'); return 'thinking'; }
+  async decide(): Promise<ToolCall> {
+    const i = this.n++;
+    return i === 0
+      ? { tool: 'search_corpus', args: { query: 'cpu', k: 5 } }
+      : { tool: 'mark_done', args: { result: { root_cause: 'x', remediation: 'y' } } };
+  }
+  cancel(): void {}
+}
+
+describe('02 agent emits real phase events for the rail', () => {
+  it('emits receive, think, act (with tool), observe each step', async () => {
+    const phases: PhaseEvent[] = [];
+    const cb: StepCallbacks = { onStream: () => {}, onTrace: () => {}, onPhase: (p) => phases.push(p) };
+    const scenario = makeAgentScenario(new WalkLLM(), DOCS);
+    await scenario.next(cb);
+    const names = phases.map((p) => p.phase);
+    expect(names).toContain('receive');
+    expect(names).toContain('think');
+    expect(names).toContain('act');
+    expect(names).toContain('observe');
+    // 'act' carries the tool name so the rail can highlight it.
+    const act = phases.find((p) => p.phase === 'act');
+    expect(act?.tool).toBe('search_corpus');
+  });
+});
+
+describe('04 search exposes a read-only INPUT panel', () => {
+  it("the first step has an 'input' panel whose body shows the QUESTION", async () => {
+    const cb: StepCallbacks = { onStream: () => {}, onTrace: () => {} };
+    const scenario = makeSearchScenario(new WalkLLM(), DOCS);
+    const step = await scenario.next(cb);
+    const input = step.panels.find((p) => p.key === 'input');
+    expect(input).toBeDefined();
+    expect(input?.body).toContain('QUESTION:');
   });
 });

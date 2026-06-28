@@ -104,6 +104,9 @@ export async function runStream(
   const { llm, messages, label, kind, mode, cb, trace, traceStep } = opts;
   const stream = makeStream(label, kind);
   cb.onStream({ ...stream }); // initial empty box
+  // A think() box opening IS the 'think' phase starting — emit it so the rail lights
+  // the Think node as the real reasoning begins (additive; reflects real execution).
+  if (mode === 'think') cb.onPhase?.({ phase: 'think' });
 
   const onToken = (t: string) => {
     stream.text += t;

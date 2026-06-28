@@ -184,6 +184,9 @@ export class SearchScenario extends BaseScenario {
   protected async runStep(stepIndex: number, cb: StepCallbacks): Promise<StepResult> {
     const stepNum = stepIndex + 1;
     this.trace.spanOpen('action', { step: stepNum });
+    // RECEIVE — the step has read the frontier + research log; light the Receive node
+    // with the 1-based step as the loop iteration.
+    cb.onPhase?.({ phase: 'receive', iteration: stepNum });
 
     // ── working memory: the frontier so far (this is the loop's closure) ──
     const frontierBefore = this.frontierText();
@@ -217,6 +220,18 @@ export class SearchScenario extends BaseScenario {
       },
     ];
 
+    // ①ᵇ INPUT — a READ-ONLY view of the prompt the model reads THIS step: the
+    //    question plus a note that it picks ONE action from the frontier + log above.
+    //    Shown FIRST (StepView's INPUT_KEYS renders 'input' panels at the top) so the
+    //    step opens with its starting context, not straight into the decision box.
+    const inputPanel = makePanel(
+      'input',
+      codeTitle('Input prompt → model'),
+      `QUESTION: ${QUESTION}\n\nThe model reads the frontier + research log above and picks ONE action.`,
+      'ctx',
+    );
+    cb.onPanel?.(inputPanel);
+
     // The model picks ONE action (web_search / mark_done). There is no separate
     // "thinking" step here — this task is a short act-until-terminal loop, and a
     // pure reasoning monologue every step added noise without changing the decision
@@ -226,6 +241,10 @@ export class SearchScenario extends BaseScenario {
 
     // ③ the HARNESS executes the model's chosen action against the fixture.
     const plan = this.executeAction(decision);
+    // ACT + OBSERVE — the chosen action ran against the fixture and produced an
+    // observation; light both nodes carrying the executed tool name.
+    cb.onPhase?.({ phase: 'act', tool: plan.tool });
+    cb.onPhase?.({ phase: 'observe', tool: plan.tool });
     this.trace.step(
       'tool_call',
       { tool: plan.tool, frontier: this.sources.length },
@@ -275,7 +294,7 @@ export class SearchScenario extends BaseScenario {
         : `${MAX_STEPS - stepNum} action(s) of budget remaining`);
     const budgetPanel = makePanel('budget', codeTitle('Budget'), budgetBody, 'observe');
 
-    const panels = [frontierPanel, decisionPanel, terminalPanel, budgetPanel];
+    const panels = [inputPanel, frontierPanel, decisionPanel, terminalPanel, budgetPanel];
 
     // ── resolve the ending: SUCCESS (predicate) or BUDGET EXHAUSTION ──
     let done = false;
@@ -337,6 +356,9 @@ export class SearchScenario extends BaseScenario {
     ];
     const stream = makeStream('Decision', 'decision');
     cb.onStream({ ...stream });
+    // THINK — the decision stream opening IS this scenario's reasoning starting (its
+    // 'thinking' streams live inside the decision box); light the Think node now.
+    cb.onPhase?.({ phase: 'think' });
     let raw = '';
     // Reuse llm.stream for free-form structured output (decide() is locked to the
     // 6 corpus tools; this scenario has its own action set, so we parse ourselves).

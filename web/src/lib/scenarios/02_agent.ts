@@ -97,6 +97,9 @@ export class AgentScenario extends BaseScenario {
     // into the Thinking box; the context only appeared at commit. (Bug: "这应该是起始
     // block，这个block之后才会thinking".)
     cb.onPanel?.(contextPanel);
+    // RECEIVE — the step has read its working memory (incident + prior observations);
+    // light the Receive node with the 1-based iteration so the rail shows the loop turn.
+    cb.onPhase?.({ phase: 'receive', iteration: stepIndex + 1 });
 
     const messages: ChatMsg[] = [
       { role: 'system', content: systemPrompt() },
@@ -257,6 +260,9 @@ export class AgentScenario extends BaseScenario {
       `${decision.tool}(${JSON.stringify(decision.args)})`,
       'tool',
     );
+    // ACT — a concrete tool call was chosen; carry its name so the rail can highlight
+    // the tool the agent is about to run.
+    cb.onPhase?.({ phase: 'act', tool: decision.tool });
 
     // ④ EXECUTE the tool → OBSERVATION.
     const result = this.tools.call(decision);
@@ -265,6 +271,8 @@ export class AgentScenario extends BaseScenario {
     if (!result.ok && decision.tool === 'propose_action') guardrail = 'whitelist_blocked';
     const observationBody = `[${okTag}] ${result.message}` + summarizeData(result.data);
     const observationPanel = makePanel('observation', codeTitle('Observation'), observationBody, 'observe');
+    // OBSERVE — the tool ran and its result is now the agent's new evidence.
+    cb.onPhase?.({ phase: 'observe', tool: decision.tool });
     this.trace.step(
       'tool_call',
       { tool: decision.tool, ok: result.ok, message: result.message },
