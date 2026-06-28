@@ -16,6 +16,7 @@ import Controls from '@/components/Controls';
 import TracePanel from '@/components/TracePanel';
 import LoopRail from '@/components/LoopRail';
 import LearnView from '@/components/LearnView';
+import IntroBox from '@/components/IntroBox';
 import { mockScenarioMetas } from '@/components/mockState';
 import { GemmaLLM } from '@/lib/llm';
 import { loadCorpus } from '@/lib/corpus';
@@ -364,6 +365,7 @@ export default function Home() {
   );
 
   const current = state.current;
+  const meta = SCENARIOS.find((s) => s.id === activeId);
   // The append-only timeline: every committed step, in chronological order. While a
   // step streams, `current` is newer than the last committed step (its index === the
   // committed count) — show it live at the bottom until it commits.
@@ -373,7 +375,7 @@ export default function Home() {
 
   return (
     <AppShell
-      subtitle={view === 'run' ? SCENARIOS.find((s) => s.id === activeId)?.subtitle : undefined}
+      subtitle={view === 'run' ? meta?.subtitle : undefined}
       modelLoader={modelLoader}
     >
       {view === 'learn' ? (
@@ -390,6 +392,7 @@ export default function Home() {
           >
             ← Concept
           </button>
+          {meta && <IntroBox title={meta.title} intro={meta.intro} />}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[136px_1fr_minmax(300px,400px)]">
             {/* rail: the live agent loop, driven by REAL onPhase events */}
             <aside className="hidden lg:block">

@@ -6,7 +6,6 @@
 
 import { motion } from 'framer-motion';
 import type { ScenarioMeta, ScenarioId } from '@/types';
-import { RAIL_NODES } from '@/lib/scenarioPhases';
 
 export default function LearnView({
   scenarios,
@@ -30,12 +29,12 @@ export default function LearnView({
           step. A <b>guardrail</b> stops an unsafe or runaway action.
         </p>
         <div className="flex flex-wrap gap-2">
-          {RAIL_NODES.map((n, i) => (
-            <span key={n.phase} className="flex items-center gap-2">
+          {['INPUT', 'THINK', 'GENERATE', 'ACT', 'OBSERVE'].map((label, i, arr) => (
+            <span key={label} className="flex items-center gap-2">
               <span className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-ink-base">
-                {n.label}
+                {label}
               </span>
-              {i < RAIL_NODES.length - 1 && <span className="text-ink-faint">→</span>}
+              {i < arr.length - 1 && <span className="text-ink-faint">→</span>}
             </span>
           ))}
           <span className="text-decide">↺</span>
