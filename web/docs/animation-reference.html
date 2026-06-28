@@ -1,0 +1,93 @@
+<h2>Teaching-focused animations — live preview</h2>
+<p class="subtitle">真实可点的动画(不是图)。点每个按钮看效果,感受"顺滑灵动"。底部选你的偏好。</p>
+
+<style>
+  .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+  .demo{background:linear-gradient(160deg,#0a0e14,#0d1420);border:1px solid #1a2433;border-radius:12px;padding:14px;min-height:200px;position:relative;overflow:hidden}
+  .demo h4{color:#22d3ee;font-size:13px;margin:0 0 4px}
+  .demo .hint{color:#5a6b80;font-size:11px;margin-bottom:10px}
+  .btn{background:linear-gradient(90deg,#2dd4bf,#22d3ee);color:#06121a;font-weight:700;border:0;border-radius:8px;padding:6px 16px;cursor:pointer;font-size:12px}
+  .blk{border-radius:8px;padding:8px 10px;font-size:11px;margin:5px 0}
+  .blk-obs{background:rgba(244,114,182,.08);border:1px solid #f472b644;color:#f4b6d6}
+  .blk-ctx{background:rgba(34,211,238,.08);border:1px solid #22d3ee44;color:#a6e8f5}
+  /* 1. observation 回流 */
+  .fly{transition:transform .8s cubic-bezier(.4,0,.2,1),opacity .8s;}
+  .fly.go{transform:translateY(46px) scale(.9);opacity:.25}
+  .arrow{color:#f472b6;font-size:10px;opacity:0;transition:opacity .5s;text-align:center;margin:2px}
+  .arrow.show{opacity:1}
+  /* 2. trace span 展开 */
+  .trow{font-family:monospace;font-size:10px;color:#8aa0b8;padding:2px 0;max-height:0;opacity:0;overflow:hidden;transition:max-height .35s ease,opacity .35s}
+  .trow.open{max-height:20px;opacity:1}
+  .tspan{color:#2dd4bf;cursor:pointer;font-family:monospace;font-size:10px}
+  .tkey{color:#fbbf24}
+  /* 3. 流式打字 */
+  .typed{font-size:11px;color:#c4d2e0;line-height:1.5;min-height:48px}
+  .cursor{display:inline-block;width:6px;height:12px;background:#fbbf24;animation:blink 1s steps(2) infinite;vertical-align:middle}
+  @keyframes blink{50%{opacity:0}}
+  /* 4. 检索命中高亮 */
+  .hit{background:rgba(255,255,255,.03);border:1px solid #1a2433;border-radius:6px;padding:5px 8px;font-size:11px;color:#8aa0b8;margin:4px 0;transition:all .5s}
+  .hit.lit{border-color:#2dd4bf;color:#c4d2e0;box-shadow:0 0 14px rgba(45,212,191,.25);transform:translateX(4px)}
+  .hit.dim{opacity:.35}
+</style>
+
+<div class="demo-grid">
+
+  <!-- 1 -->
+  <div class="demo">
+    <h4>① Observation → next Context(回流)</h4>
+    <div class="hint">教学核心:看 ④ 的结果"流"进下一步的 ①</div>
+    <div id="d1ctx" class="blk blk-ctx">① CONTEXT — question + history</div>
+    <div id="d1arrow" class="arrow">↓ feeds into next step</div>
+    <div id="d1obs" class="blk blk-obs fly">④ OBSERVATION — found cpu_saturation_runbook</div>
+    <div style="margin-top:10px"><button class="btn" onclick="d1()">▶ Next step</button></div>
+  </div>
+
+  <!-- 2 -->
+  <div class="demo">
+    <h4>② Trace span 展开(langsmith 风)</h4>
+    <div class="hint">点 span 折叠/展开,子步骤平滑滑出</div>
+    <div class="tspan" onclick="d2()">▸ <span id="d2tri">▶</span> span: agent_loop <span style="color:#5a6b80">(2.3s)</span></div>
+    <div id="d2a" class="trow">　<span class="tkey">n2</span> step/tool_call search_corpus</div>
+    <div id="d2b" class="trow">　<span class="tkey">n3</span> step/tool_call get_doc_summary</div>
+    <div id="d2c" class="trow">　<span class="tkey">n4</span> step/llm_call <span style="color:#f472b6">+raw</span></div>
+  </div>
+
+  <!-- 3 -->
+  <div class="demo">
+    <h4>③ LLM 流式打字(thinking)</h4>
+    <div class="hint">逐字吐出 + 光标,模型"正在想"</div>
+    <div id="d3" class="typed"></div>
+    <div style="margin-top:8px"><button class="btn" onclick="d3run()">▶ Stream</button></div>
+  </div>
+
+  <!-- 4 -->
+  <div class="demo">
+    <h4>④ 检索命中高亮</h4>
+    <div class="hint">检索后,命中的 doc 点亮上浮,其余变暗</div>
+    <div class="hit" id="h1">cpu_cooler_buying_guide</div>
+    <div class="hit" id="h2">cpu_saturation_runbook</div>
+    <div class="hit" id="h3">disk_io_latency_runbook</div>
+    <div style="margin-top:8px"><button class="btn" onclick="d4()">▶ Retrieve</button></div>
+  </div>
+
+</div>
+
+<script>
+function d1(){const o=document.getElementById('d1obs'),a=document.getElementById('d1arrow');a.classList.add('show');o.classList.add('go');setTimeout(()=>{o.classList.remove('go');a.classList.remove('show');},1600);}
+function d2(){const t=document.getElementById('d2tri');const open=t.textContent==='▼';t.textContent=open?'▶':'▼';['d2a','d2b','d2c'].forEach((id,i)=>setTimeout(()=>document.getElementById(id).classList.toggle('open',!open),i*90));}
+function d3run(){const el=document.getElementById('d3');const txt="I've confirmed it's CPU saturation, but I haven't read the root-cause doc yet. I should search the corpus, then open the runbook.";el.innerHTML='';let i=0;const cur='<span class="cursor"></span>';const t=setInterval(()=>{i++;el.innerHTML=txt.slice(0,i)+cur;if(i>=txt.length){clearInterval(t);el.innerHTML=txt;}},22);}
+function d4(){const ids=['h1','h2','h3'];ids.forEach(id=>document.getElementById(id).className='hit');setTimeout(()=>{document.getElementById('h2').classList.add('lit');document.getElementById('h1').classList.add('dim');document.getElementById('h3').classList.add('dim');},250);}
+</script>
+
+<div class="options" style="margin-top:8px">
+  <div class="option" data-choice="love" onclick="toggleSelect(this)">
+    <div class="letter">A</div><div class="content"><h3>这个程度刚好</h3><p>顺滑、服务教学、不抢戏。照这个量级写进 PLAN。</p></div>
+  </div>
+  <div class="option" data-choice="more" onclick="toggleSelect(this)">
+    <div class="letter">B</div><div class="content"><h3>还能再多一点</h3><p>再加:卡片悬浮、按钮微交互、步骤进场、背景微动等(仍克制)。</p></div>
+  </div>
+  <div class="option" data-choice="less" onclick="toggleSelect(this)">
+    <div class="letter">C</div><div class="content"><h3>稍微收一点</h3><p>留打字 + 回流,去掉高亮上浮那种,更安静。</p></div>
+  </div>
+</div>
+<p class="subtitle" style="margin-top:8px">点 ▶ 按钮看每个动起来。终端告诉我 A/B/C + 想调的细节。</p>

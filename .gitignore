@@ -1,0 +1,17 @@
+*.md
+node_modules
+.superpowers
+reference
+
+# Next.js build artifacts
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / editor
+.DS_Store
+
+# secrets — never commit
+.env
+.env.*
