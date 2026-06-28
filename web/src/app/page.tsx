@@ -176,9 +176,11 @@ export default function Home() {
     const pendingTrace: TraceLine[] = [];
     const cb = {
       onStream: (stream: LlmStream) => {
+        if (epochRef.current !== startEpoch) return;
         setState((s) => updateCurrentStream(s, stream));
       },
       onPanel: (panel: Panel) => {
+        if (epochRef.current !== startEpoch) return;
         setState((s) => updateCurrentPanel(s, panel));
       },
       onTrace: (line: TraceLine) => {
