@@ -190,7 +190,8 @@ describe('smoke: every scenario runs to completion', () => {
       const input = step.panels.find((p) => p.key === 'input');
       expect(input, `step ${step.index} has an input panel`).toBeTruthy();
       // The input panel must actually contain the prompt text (system + context).
-      expect(input!.body).toContain('SYSTEM:');
+      // The SYSTEM section reflects the THINKING step's real framing.
+      expect(input!.body).toContain('SYSTEM (thinking step):');
     }
   });
 
@@ -260,8 +261,10 @@ describe('smoke: every scenario runs to completion', () => {
 
   it('thinking prompt forbids re-planning and omits the numbered operating procedure', () => {
     const instr = thinkingInstruction().toLowerCase();
-    // forbids the numbered-plan / re-plan behavior the user saw
-    expect(instr).toMatch(/numbered|thinking process|re-?plan|only/);
+    // forbids the numbered-plan / re-plan behavior the user saw — pin the SPECIFIC
+    // anti-numbered-plan language so a regression can't slip through on a loose word.
+    expect(instr).toContain('numbered');
+    expect(instr).toMatch(/thinking process/);
     // the THINKING system framing must NOT carry the numbered operating procedure
     const tsp = thinkingSystemPrompt();
     expect(tsp).not.toContain('OPERATING PROCEDURE');

@@ -107,14 +107,21 @@ export class AgentScenario extends BaseScenario {
       { role: 'user', content: context },
     ];
 
-    // ①ᵇ INPUT — the exact prompt handed to the model THIS step, shown before the
-    //    Thinking box so you can read what the model is reacting to (not just its
-    //    output). Honest: this is the verbatim system + context + thinking nudge.
+    // ①ᵇ INPUT — the prompt handed to the model for THIS step's THINKING stream,
+    //    shown before the Thinking box so you can read what the model is reacting to
+    //    (not just its output). Honest: the SYSTEM section is thinkingSystemPrompt()
+    //    — the LIGHT framing the thinking step actually receives (no numbered
+    //    OPERATING_PROCEDURE) — plus the context + thinking nudge. A trailing NOTE
+    //    discloses that the DECISION step (next) uses the fuller systemPrompt()
+    //    framing (numbered OPERATING PROCEDURE + tool menu). Showing the real prompt
+    //    per step is the whole lesson, so this panel must match what each step reads.
     const thinkNudge = thinkingInstruction();
     const inputText =
-      `SYSTEM:\n${systemPrompt()}\n\n` +
+      `SYSTEM (thinking step):\n${thinkingSystemPrompt()}\n\n` +
       `USER (context / working memory):\n${context}\n\n` +
-      `USER (this step):\n${thinkNudge}`;
+      `USER (this step):\n${thinkNudge}\n\n` +
+      `NOTE: the DECISION step (next) swaps in the full systemPrompt() — it adds the ` +
+      `numbered OPERATING PROCEDURE + the tool menu that constrain the tool call.`;
     const inputPanel = makePanel('input', codeTitle('Input prompt → model'), inputText, 'ctx');
     this.trace.step('input', { chars: inputText.length }, inputText);
     // Emit the INPUT prompt block too, still BEFORE thinking starts.
