@@ -332,7 +332,7 @@ export default function Home() {
     >
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_minmax(320px,420px)]">
         {/* main: controls + the chronological, scrollable step timeline */}
-        <section className="flex min-h-0 flex-col gap-4">
+        <section className="flex min-h-0 min-w-0 flex-col gap-4">
           <Controls
             phase={state.phase}
             finished={state.finished}
@@ -360,7 +360,7 @@ export default function Home() {
               <div
                 ref={timelineRef}
                 onScroll={onTimelineScroll}
-                className="flex max-h-[calc(100vh-12rem)] flex-col gap-4 overflow-y-auto pr-1"
+                className="flex min-w-0 max-h-[calc(100vh-12rem)] flex-col gap-4 overflow-y-auto pr-1"
               >
                 {/* ONE list, committed + live, every card keyed by its step.index.
                     The live step's index is ALWAYS the committed count, so when it

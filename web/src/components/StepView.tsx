@@ -89,7 +89,7 @@ function PanelBlock({ panel, highlighted }: { panel: Panel; highlighted?: boolea
         </div>
         {/* Bounded, internally-scrollable body — keeps a tall panel (input prompt /
             full doc body) from stretching the whole step past the viewport. */}
-        <div className={`${bodyMaxHeight(panel.key)} overflow-y-auto pr-1`}>
+        <div className={`${bodyMaxHeight(panel.key)} overflow-y-auto overflow-x-auto pr-1`}>
           <PanelBody body={panel.body} />
         </div>
       </div>
