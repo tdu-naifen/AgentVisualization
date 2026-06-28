@@ -109,15 +109,12 @@ export class RagScenario extends BaseScenario {
 
     this.hits = rankDocs(this.docs, DEMO_QUERY, RETRIEVE_K);
 
-    const queryBody = [
-      `"${DEMO_QUERY}"`,
-      '',
-      'BM25 lexical retrieval over the corpus — deterministic, NO model.',
-      'BM25 ranks on literal token overlap, so a CPU-cooler buying guide (a',
-      'lexical look-alike: right token `cpu`, wrong intent) ranks high alongside',
-      'the real saturation runbook. That collision is the lesson — and it is why',
-      'retrieval eval (recall@k / MRR) is kept separate from answer eval.',
-    ].join('\n');
+    const queryBody = `"${DEMO_QUERY}"`;
+    const queryHint =
+      'BM25 is lexical retrieval — it ranks by literal token overlap, no model. ' +
+      'Because it matches the token `cpu`, a CPU-cooler buying guide (right word, ' +
+      'wrong intent) ranks high next to the real saturation runbook. That collision ' +
+      'is why retrieval eval (recall@k / MRR) is kept separate from answer eval.';
 
     // Tag the distractor inline so the collision is legible in the ranked list.
     const distractorIds = new Set(
@@ -149,7 +146,7 @@ export class RagScenario extends BaseScenario {
 
     const step = makeStep(stepIndex, 'Retrieve', {
       panels: [
-        makePanel('query', codeTitle('Query'), queryBody, 'ctx'),
+        makePanel('query', codeTitle('Query'), queryBody, 'ctx', queryHint),
         makePanel('hits', codeTitle(`Retrieved · top ${RETRIEVE_K}`), hitsBody, 'ctx'),
       ],
     });
@@ -197,7 +194,15 @@ export class RagScenario extends BaseScenario {
       // this is what makes "stage ② is the only step with a streaming box" visible.
       streams: [stream],
       panels: [
-        makePanel('grounding', codeTitle(`Context · retrieved docs (top ${GROUNDING_K})`), groundingText, 'ctx'),
+        makePanel(
+          'grounding',
+          codeTitle(`Context · retrieved docs (top ${GROUNDING_K})`),
+          groundingText,
+          'ctx',
+          `Re-rank: retrieval returned the top ${RETRIEVE_K}; we keep the top ${GROUNDING_K} ` +
+            'as the grounding window the model reasons over. Narrowing 5→3 trades recall for a ' +
+            'tighter, less distracting context.',
+        ),
         makePanel('answer', llmTitle('Answer'), answerBody, 'decide'),
       ],
     });
@@ -223,21 +228,6 @@ export class RagScenario extends BaseScenario {
     // hard-FAILs — the gate distinguishes "model unavailable" from "model wrong".
     const verdict = !nonEmpty ? 'DEGRADED' : pass ? 'PASS' : 'FAIL';
 
-    const reasons: string[] = [
-      `1. non-empty answer:      ${nonEmpty ? 'OK' : 'MISSING'}`,
-      `2. has [doc_id] citation: ${
-        !nonEmpty ? 'SKIPPED' : hasCitation ? `OK — ${cited.map((c) => `[${c}]`).join(', ')}` : 'MISSING'
-      }`,
-      `3. cited ids retrieved:   ${
-        !hasCitation
-          ? 'SKIPPED (no citation)'
-          : ungrounded.length === 0
-            ? 'OK (grounded provenance)'
-            : `FAILED — ungrounded: ${ungrounded.map((c) => `[${c}]`).join(', ')}`
-      }`,
-    ];
-    const body = `${verdict}\n\n${reasons.join('\n')}`;
-
     this.trace.step('gate', {
       verdict,
       pass,
@@ -249,8 +239,19 @@ export class RagScenario extends BaseScenario {
     // Surface the gate firing as a guardrail when it does not cleanly pass.
     const guardrail = verdict === 'PASS' ? undefined : verdict === 'DEGRADED' ? 'degraded' : 'citation_gate';
 
-    const step = makeStep(stepIndex, 'Validate', {
-      panels: [makePanel('validation', codeTitle('Validation gate'), body, 'observe')],
+    const answerBody = this.answer.trim().length > 0 ? this.answer.trim() : '(model produced no answer)';
+    const step = makeStep(stepIndex, 'Answer', {
+      panels: [
+        makePanel(
+          'answer',
+          llmTitle('Answer'),
+          answerBody,
+          'decide',
+          'A citation gate runs behind the scenes: it checks the answer is non-empty, ' +
+            'cites a [doc_id], and that every cited id was actually retrieved (grounded ' +
+            'provenance). The verdict here is ' + verdict + '.',
+        ),
+      ],
       guardrail,
     });
     return { step, done: true };

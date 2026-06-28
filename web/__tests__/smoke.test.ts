@@ -254,7 +254,7 @@ describe('smoke: every scenario runs to completion', () => {
     while (!scenario.isFinished() && titles.length < MAX_DRIVE_STEPS) {
       titles.push((await scenario.next(cb)).title);
     }
-    expect(titles).toEqual(['Retrieve', 'Reason', 'Validate']); // no 'Ingest'
+    expect(titles).toEqual(['Retrieve', 'Reason', 'Answer']); // no 'Ingest'; final step leads with the model answer
   });
 });
 
