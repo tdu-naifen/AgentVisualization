@@ -394,7 +394,7 @@ export default function Home() {
             {/* rail: the live agent loop, driven by REAL onPhase events */}
             <aside className="hidden lg:block">
               <div className="sticky top-4">
-                <LoopRail scenarioId={activeId} active={activePhase} iteration={iteration} running={running} />
+                <LoopRail scenarioId={activeId} active={activePhase} iteration={iteration} />
               </div>
             </aside>
             {/* main: controls + the chronological, scrollable step timeline */}

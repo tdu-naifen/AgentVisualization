@@ -19,12 +19,10 @@ export default function LoopRail({
   scenarioId,
   active,
   iteration,
-  running, // kept for signature stability; not used for lit logic
 }: {
   scenarioId: ScenarioId;
   active: PhaseEvent | null;
   iteration: number;
-  running: boolean;
 }) {
   const spec = railFor(scenarioId);
 
