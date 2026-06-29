@@ -2,7 +2,7 @@
 
 A WebGPU-based agent explainer. Gemma runs entirely in your browser — no backend — to visualize how LLM agents and workflows run, step by step.
 
-https://github.com/tdu-naifen/AgentVisualization/raw/main/clip.mov
+![demo](clip.gif)
 
 ## Run
 
