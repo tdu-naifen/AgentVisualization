@@ -1,7 +1,7 @@
 'use client';
 
-// LearnView — the concept landing. Teaches the loop once (what receive/think/act/
-// observe mean; tool/trace/guardrail), then lists scenarios as cards in two groups:
+// LearnView — the concept landing. Teaches the loop once (what input/think/generate/
+// act mean; tool/trace/guardrail), then lists scenarios as cards in two groups:
 // Agents (loop) vs Workflows (pipeline). Clicking a card opens its live run.
 
 import { motion } from 'framer-motion';
@@ -22,14 +22,14 @@ export default function LearnView({
       <section className="rounded-xl border border-line bg-bg-panel/60 p-5">
         <h2 className="mb-2 text-base font-bold text-ink-base">What is an agent loop?</h2>
         <p className="mb-3 text-[13px] leading-relaxed text-ink-dim">
-          An agent solves a task by looping: it <b className="text-ctx">receives</b> context,{' '}
-          <b className="text-think">thinks</b>, <b className="text-tool">acts</b> by calling a tool,
-          and <b className="text-observe">observes</b> the result — then loops again until it is done.
-          A <b>tool</b> is a function the model may call. A <b>trace</b> is the recorded log of every
-          step. A <b>guardrail</b> stops an unsafe or runaway action.
+          An agent solves a task by looping: it reads its <b className="text-ctx">input</b>,{' '}
+          <b className="text-think">thinks</b>, <b className="text-decide">generates</b> a tool call,
+          and the harness <b className="text-tool">acts</b> — the result becomes the next input, and it
+          loops until done. A <b>tool</b> is a function the model may call. A <b>trace</b> is the recorded
+          log of every step. A <b>guardrail</b> stops an unsafe or runaway action.
         </p>
         <div className="flex flex-wrap gap-2">
-          {['INPUT', 'THINK', 'GENERATE', 'ACT', 'OBSERVE'].map((label, i, arr) => (
+          {['INPUT', 'THINK', 'GENERATE', 'ACT'].map((label, i, arr) => (
             <span key={label} className="flex items-center gap-2">
               <span className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-ink-base">
                 {label}
@@ -37,7 +37,7 @@ export default function LearnView({
               {i < arr.length - 1 && <span className="text-ink-faint">→</span>}
             </span>
           ))}
-          <span className="text-decide">↺</span>
+          <span className="text-decide">↺ result → next input</span>
         </div>
       </section>
 
