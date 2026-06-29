@@ -72,6 +72,11 @@ export default function Home() {
   const [view, setView] = useState<'learn' | 'run'>('learn');
   const [activePhase, setActivePhase] = useState<PhaseEvent | null>(null);
   const [iteration, setIteration] = useState(1);
+  // Live token meter: real output tokens streamed this run (~chars/4 from onStream
+  // deltas). Honest estimate; resets on switch/reset. Per-stream lengths tracked so
+  // we sum only NEW chars each tick, not the full re-emitted text.
+  const [tokens, setTokens] = useState(0);
+  const streamLensRef = useRef<Map<string, number>>(new Map());
   // Generation epoch: bumped on pause / scenario-switch / reset. onNext captures it
   // before awaiting and DISCARDS its result if the epoch changed meanwhile — so a
   // cancelled or switched-away generation can't commit onto the new state.
@@ -155,6 +160,8 @@ export default function Home() {
     setFollowing(true);
     setActivePhase(null);
     setIteration(1);
+    setTokens(0);
+    streamLensRef.current.clear();
   }, []);
 
   // Open a scenario from the landing: switch to it (which cancels any in-flight run
@@ -199,6 +206,13 @@ export default function Home() {
     const cb = {
       onStream: (stream: LlmStream) => {
         if (epochRef.current !== startEpoch) return;
+        // Count only the NEW chars since this stream's last tick → ~tokens (chars/4).
+        const prev = streamLensRef.current.get(stream.id) ?? 0;
+        const delta = stream.text.length - prev;
+        if (delta > 0) {
+          streamLensRef.current.set(stream.id, stream.text.length);
+          setTokens((t) => t + Math.round(delta / 4));
+        }
         setState((s) => updateCurrentStream(s, stream));
       },
       onPanel: (panel: Panel) => {
@@ -343,6 +357,10 @@ export default function Home() {
     stepNodes.current.clear();
     followRef.current = true;
     setFollowing(true);
+    setActivePhase(null);
+    setIteration(1);
+    setTokens(0);
+    streamLensRef.current.clear();
   }, [activeId]);
 
   // Auto-stick the timeline to the newest content while `following` is on (a new
@@ -417,6 +435,7 @@ export default function Home() {
             auto={auto}
             onAuto={runAuto}
             onPause={pauseAuto}
+            tokens={tokens}
           />
           {state.error && (
             <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">

@@ -42,7 +42,7 @@ export default function LoopRail({
         return (
           <div
             key={`${node.kind}-${index}`}
-            className={`rounded-lg border px-2.5 py-2 text-[11px] font-semibold ${a.text} ${
+            className={`relative overflow-hidden rounded-lg border px-2.5 py-2 text-[11px] font-semibold ${a.text} ${
               isActive ? 'border-current' : 'border-line'
             }`}
             style={
@@ -54,9 +54,16 @@ export default function LoopRail({
                 : { opacity: 0.55 }
             }
           >
-            <span>{node.label}</span>
+            {/* traveling pulse: a sweep of accent light crosses the active node */}
+            {isActive && (
+              <span
+                className="rail-pulse pointer-events-none absolute inset-y-0 left-0 w-8"
+                style={{ background: `linear-gradient(90deg,transparent,rgba(${a.rgb},0.35),transparent)` }}
+              />
+            )}
+            <span className="relative">{node.label}</span>
             {node.kind === 'act' && isActive && active?.tool && (
-              <div className="mt-1 truncate text-[10px] font-normal text-tool">&gt; {active.tool}</div>
+              <div className="relative mt-1 truncate text-[10px] font-normal text-tool">&gt; {active.tool}</div>
             )}
           </div>
         );

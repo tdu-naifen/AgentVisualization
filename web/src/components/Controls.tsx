@@ -26,6 +26,8 @@ interface ControlsProps {
   onAuto?: () => void;
   /** pause auto-mode */
   onPause?: () => void;
+  /** real output tokens streamed this run (counted from onStream deltas) */
+  tokens?: number;
 }
 
 export default function Controls({
@@ -39,6 +41,7 @@ export default function Controls({
   auto,
   onAuto,
   onPause,
+  tokens,
 }: ControlsProps) {
   // Next is blocked while a step streams, once finished, OR before the model is
   // ready (you cannot advance a loop with no model behind it).
@@ -70,7 +73,7 @@ export default function Controls({
             Streaming…
           </span>
         ) : (
-          'Next ▸'
+          'Next >'
         )}
       </motion.button>
 
@@ -91,7 +94,7 @@ export default function Controls({
             animate={{ opacity: [1, 0.3, 1] }}
             transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
           />
-          Auto… ⏸ Pause
+          Auto… [ ]] Pause
         </motion.button>
       ) : (
         <motion.button
@@ -106,7 +109,7 @@ export default function Controls({
             autoToggleDisabled || !onAuto ? 'cursor-not-allowed opacity-40' : ''
           }`}
         >
-          ▶▶ Auto
+          &gt;&gt; Auto
         </motion.button>
       )}
 
@@ -122,7 +125,7 @@ export default function Controls({
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
           className="rounded-lg border border-decide/50 bg-decide/10 px-4 py-2 text-[13px] font-semibold text-decide transition-colors hover:bg-decide/20"
         >
-          Reset ↺
+          Reset [o]
         </motion.button>
       )}
 
@@ -131,6 +134,11 @@ export default function Controls({
         {stepIndex !== undefined && (
           <span>
             Step <span className="font-semibold text-ink-base">{stepIndex + 1}</span>
+          </span>
+        )}
+        {tokens !== undefined && tokens > 0 && (
+          <span title="real output tokens this run (counted live)">
+            ~<span className="font-semibold text-decide">{tokens}</span> tok
           </span>
         )}
         {finished && (

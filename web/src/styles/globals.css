@@ -85,3 +85,7 @@ body {
   0%,100% { transform: translateY(0); text-shadow: 0 0 4px rgb(var(--decide)/.6); }
   50% { transform: translateY(3px); text-shadow: 0 0 12px rgb(var(--decide)); }
 }
+
+/* Rail traveling pulse: a light sweep crosses the active node left→right. */
+.rail-pulse { animation: rail-sweep 1.4s linear infinite; }
+@keyframes rail-sweep { 0% { transform: translateX(-2rem); } 100% { transform: translateX(9rem); } }
