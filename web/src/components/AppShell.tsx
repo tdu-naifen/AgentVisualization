@@ -1,10 +1,10 @@
 'use client';
 
-// AppShell — the overall page frame: app title (+ an optional one-line subtitle)
-// and the `modelLoader` pinned top-right, then the content area below. Scenario
-// SELECTION lives in the content itself (the Learn landing's grouped cards); the
-// old pill-tab row was removed because it duplicated those cards on the Learn page.
-// AppShell just frames — `children` decides the inner layout.
+// AppShell — the overall page frame: app title (block cursor, no emoji), the theme
+// toggle (Terminal · Light green · Light) + the `modelLoader` pinned top-right, then
+// the content area. Scenario selection lives in the content; AppShell just frames.
+
+import ThemeToggle from './ThemeToggle';
 
 interface AppShellProps {
   /** optional one-line subtitle under the title (e.g. the active scenario's, shown in run view) */
@@ -18,14 +18,17 @@ export default function AppShell({ subtitle, modelLoader, children }: AppShellPr
     <div className="min-h-screen bg-app text-ink-base">
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6">
         {/* ── top bar ───────────────────────────────────────────────────── */}
-        <header className="flex flex-wrap items-start justify-between gap-4">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-4">
           <div className="flex flex-col gap-0.5">
-            <h1 className="bg-accent bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-              Agent Loop Explainer 🧠
+            <h1 className="font-display text-3xl tracking-[0.08em] text-ink-base">
+              Agent vs Workflow Explainer<span className="cursor" />
             </h1>
             {subtitle && <p className="text-[12px] text-ink-dim">{subtitle}</p>}
           </div>
-          <div className="shrink-0">{modelLoader}</div>
+          <div className="flex items-center gap-5">
+            <ThemeToggle />
+            <div className="shrink-0">{modelLoader}</div>
+          </div>
         </header>
 
         {/* ── content ───────────────────────────────────────────────────── */}

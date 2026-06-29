@@ -56,7 +56,7 @@ export default function LoopRail({
           >
             <span>{node.label}</span>
             {node.kind === 'act' && isActive && active?.tool && (
-              <div className="mt-1 truncate text-[10px] font-normal text-tool">🔧 {active.tool}</div>
+              <div className="mt-1 truncate text-[10px] font-normal text-tool">&gt; {active.tool}</div>
             )}
           </div>
         );

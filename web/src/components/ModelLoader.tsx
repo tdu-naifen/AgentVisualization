@@ -28,12 +28,11 @@ export default function ModelLoader({ onLoad, progress, status, error }: ModelLo
           <motion.button
             type="button"
             onClick={onLoad}
-            whileHover={{ y: -1 }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-bold text-bg-base shadow-neon"
+            className="group rounded-lg bg-accent px-3 py-1.5 text-[12px] font-bold text-bg-base shadow-neon"
           >
-            ⬇ Load Gemma 4 (WebGPU)
+            <span className="neon-arrow">v</span> Load Gemma 4 (WebGPU)
           </motion.button>
           <span className="text-center text-[10px] text-ink-faint">
             ~3 GB, downloads once

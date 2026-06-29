@@ -20,7 +20,7 @@ export default function LearnView({
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <section className="rounded-xl border border-line bg-bg-panel/60 p-5">
-        <h2 className="mb-2 text-base font-bold text-ink-base">What is an agent loop?</h2>
+        <h2 className="mb-2 font-display text-lg tracking-wide text-ink-base">What is an agent loop?</h2>
         <p className="mb-3 text-[13px] leading-relaxed text-ink-dim">
           An agent solves a task by looping: it reads its <b className="text-ctx">input</b>,{' '}
           <b className="text-think">thinks</b>, <b className="text-decide">generates</b> a tool call,
@@ -42,6 +42,28 @@ export default function LearnView({
       </section>
 
       <CardGroup title="Agents — they loop until done" subtitle="the model decides the next move each turn" items={agents} onOpen={onOpen} />
+
+      <section className="rounded-xl border border-line bg-bg-panel/60 p-5">
+        <h2 className="mb-2 font-display text-lg tracking-wide text-ink-base">What is a workflow?</h2>
+        <p className="mb-3 text-[13px] leading-relaxed text-ink-dim">
+          A workflow is a <b>fixed pipeline</b>: the stages and their order are decided by code, not the
+          model. Each stage either runs deterministic logic or calls the model exactly once, then hands
+          off to the next. No looping, no tool choice — the model fills <b>one slot</b> and the harness
+          drives the rest. Predictable and cheap; the trade-off is no autonomy.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {['CODE', 'CODE', 'MODEL', 'CODE'].map((label, i, arr) => (
+            <span key={i} className="flex items-center gap-2">
+              <span className={`rounded-md border border-line px-2 py-1 text-[11px] font-semibold ${label === 'MODEL' ? 'text-decide' : 'text-ink-dim'}`}>
+                {label}
+              </span>
+              {i < arr.length - 1 && <span className="text-ink-faint">→</span>}
+            </span>
+          ))}
+          <span className="text-ink-faint">one fixed pass, no loop</span>
+        </div>
+      </section>
+
       <CardGroup title="Workflows — fixed pipelines" subtitle="deterministic stages; the model fills one slot" items={workflows} onOpen={onOpen} />
     </div>
   );
@@ -61,7 +83,7 @@ function CardGroup({
   return (
     <section className="flex flex-col gap-2">
       <div>
-        <h3 className="text-sm font-bold text-ink-base">{title}</h3>
+        <h3 className="font-display text-base tracking-wide text-ink-base">{title}</h3>
         <p className="text-[11px] text-ink-faint">{subtitle}</p>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
