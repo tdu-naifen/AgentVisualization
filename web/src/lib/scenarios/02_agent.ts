@@ -56,7 +56,7 @@ export class AgentScenario extends BaseScenario {
     intro:
       'A tool-using agent solves an incident by looping: it reads its working memory (input), thinks, generates ONE tool call, the harness acts, and the result feeds the next input. It picks one tool at a time on a leash (max 6 turns) and ends with a stated root cause + remediation. Watch the rail: only THINK and GENERATE are the model; ACT is the harness running your tool.',
     kind: 'agent',
-    teaches: 'An agent picks ONE tool at a time and loops — think, act, observe — until it can answer.',
+    teaches: 'An agent picks ONE tool at a time and loops — think, generate, act — until it can answer.',
   };
 
   private llm: LLM;
