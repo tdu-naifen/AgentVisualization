@@ -17,6 +17,7 @@ import TracePanel from '@/components/TracePanel';
 import LoopRail from '@/components/LoopRail';
 import LearnView from '@/components/LearnView';
 import IntroBox from '@/components/IntroBox';
+import CorpusDrawer from '@/components/CorpusDrawer';
 import { mockScenarioMetas } from '@/components/mockState';
 import { GemmaLLM } from '@/lib/llm';
 import { loadCorpus } from '@/lib/corpus';
@@ -393,6 +394,9 @@ export default function Home() {
             ← Concept
           </button>
           {meta && <IntroBox title={meta.title} intro={meta.intro} />}
+          {(activeId === '01_rag' || activeId === '02_agent') && docsRef.current && (
+            <CorpusDrawer docs={docsRef.current} scenarioId={activeId} />
+          )}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[136px_1fr_minmax(300px,400px)]">
             {/* rail: the live agent loop, driven by REAL onPhase events */}
             <aside className="hidden lg:block">
