@@ -89,3 +89,10 @@ body {
 /* Rail traveling pulse: a light sweep crosses the active node left→right. */
 .rail-pulse { animation: rail-sweep 1.4s linear infinite; }
 @keyframes rail-sweep { 0% { transform: translateX(-2rem); } 100% { transform: translateX(9rem); } }
+
+/* Empty-state: each node lights in sequence to demo the loop pre-load. */
+@keyframes empty-glow {
+  0%,100% { border-color: rgb(var(--line)); color: rgb(var(--ink-faint)); }
+  12% { border-color: rgb(var(--decide)); color: rgb(var(--decide)); box-shadow: 0 0 12px rgb(var(--decide)/.4); }
+  25% { border-color: rgb(var(--line)); color: rgb(var(--ink-base)); }
+}

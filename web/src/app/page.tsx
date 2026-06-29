@@ -551,13 +551,31 @@ function registerStepNode(
 }
 
 function EmptyHint({ ready }: { ready: boolean }) {
+  const nodes = ['INPUT', 'THINK', 'GENERATE', 'ACT'];
   return (
-    <div className="rounded-xl border border-line bg-bg-panel/60 p-6 text-sm text-ink-dim">
-      {ready ? (
-        <>Press <span className="font-semibold text-decide">Next ▸</span> to advance the agent one step.</>
-      ) : (
-        <>Load Gemma 4 (top-right) to begin. The model runs entirely in your browser via WebGPU.</>
-      )}
+    <div className="flex flex-col items-center gap-5 rounded-xl border border-line bg-bg-panel/60 p-8 text-center">
+      {/* animated ASCII loop — sells the concept before the model loads */}
+      <div className="flex flex-wrap items-center justify-center gap-2 font-display text-sm tracking-wide">
+        {nodes.map((n, i) => (
+          <span key={n} className="flex items-center gap-2">
+            <span
+              className="rounded-md border border-line px-2 py-1 text-ink-base"
+              style={{ animation: `empty-glow 4s ${i}s infinite` }}
+            >
+              {n}
+            </span>
+            {i < nodes.length - 1 && <span className="text-ink-faint">{'->'}</span>}
+          </span>
+        ))}
+        <span className="text-decide">{'↺'}</span>
+      </div>
+      <div className="text-sm text-ink-dim">
+        {ready ? (
+          <>Press <span className="font-semibold text-decide">Next &gt;</span> to advance one phase.</>
+        ) : (
+          <>Load Gemma 4 (top-right) to begin — the model runs entirely in your browser via WebGPU.</>
+        )}
+      </div>
     </div>
   );
 }
