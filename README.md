@@ -4,10 +4,5 @@ A WebGPU-based agent explainer. Gemma runs entirely in your browser — no backe
 
 ![demo](clip.gif)
 
-## Run
 
-```bash
-cd web && npm install && npm run dev
-```
-
-Open http://localhost:3000, load the model, and step through the scenarios.
+Go to https://tdu-naifen.github.io/AgentVisualization/ to try it out
